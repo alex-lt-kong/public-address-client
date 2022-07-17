@@ -1,18 +1,17 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+from emailer import emailer
 from flask import Flask, Response, request
 from waitress import serve
 
 import argparse
-import datetime
 import importlib
 import json
 import glob
 import logging
 import os
 import signal
-import smtplib
 import subprocess
 import sys
 import threading
@@ -49,7 +48,7 @@ def playlist_handler():
     """
 
     global playlist, mpg123_process
-
+    logging.info('playlist_handler "event loop" started')
     while stop_signal is False:
 
         time.sleep(0.05)
@@ -81,20 +80,20 @@ def playlist_handler():
         mpg123_process = None
 
         if len(out) > 0:
-            logging.info('mpg123_process output: {}'
-                         .format(out.decode("utf-8")))
+            logging.info('mpg123_process output: {}'.format(out.decode("utf-8")))
         if len(err) > 0:
-            logging.error('mpg123_process error: {}'
-                          .format(err.decode("utf-8")))
+            logging.error('mpg123_process error: {}'.format(err.decode("utf-8")))
 
         if len(playlist) == 0:
             logging.info('All items in playlist have been played or cleared')
+    logging.info('playlist_handler "event loop" quited')
 
 
 @app.route('/health_check/', methods=['GET'])
-def health_check():
-
+def health_check() -> Response:
+    logging.info('health_check() fired, service is up and running!')
     return Response('Up and running/设备正常', 200)
+
 
 @app.route('/clear_playlist/', methods=['GET'])
 def clear_playlist():
@@ -123,7 +122,7 @@ def clear_playlist():
 
 
 @app.route('/', methods=['GET'])
-def index():
+def index() -> Response:
 
     # user authentication is done by Apache config.
     notification_type = request.args.get('notification_type')
@@ -136,24 +135,28 @@ def index():
     sound_index = -1
 
     if notification_type not in ['custom', 'chiming']:
-        return Response(
-            'Error: failed to match any conditions.',
-            status=400)
+        err_msg = 'Error: failed to match any conditions.'
+        logging.error(err_msg)
+        return Response(err_msg, status=400)
 
     if notification_type == 'custom':
 
         try:
             sound_index = int(request.args.get('sound_index'))
         except Exception as e:
+            logging.exception('')
             return Response(str(e), status=400)
         if sound_index is None or sound_index < 0:
-            return Response(f'Invalid value (sound_index: {sound_index})',
-                            status=400)
+            err_msg = f'Invalid value (sound_index: {sound_index})'
+            logging.error(err_msg)
+            return Response(err_msg, status=400)
 
         playlist.append(['custom', sound_index])
         sound_name, songs_list = get_song_by_id(sound_index)
         if sound_name is None:
-            return Response('sound_index out of range', status=400)
+            err_msg = 'sound_index out of range'
+            logging.error(err_msg)
+            return Response(err_msg, status=400)
         sound_name = os.path.basename(sound_name)
         response_msg = (f'Success: {sound_name} (index={sound_index}) '
                         'added to the playlist')
@@ -170,7 +173,8 @@ def index():
 
     return Response(response_msg, status=200)
 
-def cleanup(*args):
+
+def cleanup(*args) -> None:
 
     global stop_signal
     stop_signal = True
@@ -178,7 +182,7 @@ def cleanup(*args):
     sys.exit(0)
 
 
-def main():
+def main() -> None:
 
     ap = argparse.ArgumentParser()
     ap.add_argument('--debug', dest='debug', action='store_true')
@@ -197,8 +201,7 @@ def main():
                '%(funcName)s: %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
-    logging.info('notification agent started')
-    start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logging.info('public-address-client started')
 
     if debug_mode is True:
         print('Running in debug mode')
@@ -214,14 +217,10 @@ def main():
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
-    emailer = importlib.machinery.SourceFileLoader(
-                    'emailer',
-                    settings['email']['path']
-                ).load_module()
     th_email = threading.Thread(target=emailer.send_service_start_notification,
                                 kwargs={'settings_path': os.path.join(app_dir, 'settings.json'),
                                         'service_name': 'Public Address Client',
-                                        'log_path': settings['app']['log_path'],
+                                        'path_of_logs_to_send': settings['app']['log_path'],
                                         'delay': 0 if debug_mode else 300})
     th_email.start()
 
