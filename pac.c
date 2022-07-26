@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/wait.h> /* for waitpid */
 
 int hello(void *p, onion_request *req, onion_response *res){
 	//onion_response_set_length(res, 11);
@@ -19,20 +20,48 @@ int hello(void *p, onion_request *req, onion_response *res){
 	onion_response_printf(res,"<p>Client description: %s",onion_request_get_client_description(req));
 	return OCS_PROCESSED;
 }
+int play_sound(char* sound_name) {
+    if (strnlen(sound_name, 1024) > 512 + 256) {
+        return -1;
+    }
+    char sound_path[1024] = "../";
+    strcat(sound_path, sound_name);
+    // https://stackoverflow.com/questions/5460421/how-do-you-write-a-c-program-to-execute-another-program
+    /*Spawn a child to run the program.*/
+    pid_t pid = fork();
+    if (pid == 0) { /* child process */
+        printf("pid == 0!\n");
+        static char *argv[]={"echo","Foo is my name.",NULL};
+        execv("/bin/echo",argv);
+        return 127;
+    }
+    else { /* pid!=0; parent process */
+        printf("pid != 0!\n");
+        waitpid(pid, 0, 0); /* wait for child to exit */
+    }
+}
 
 int index_page(void *p, onion_request *req, onion_response *res){
-    printf("in index_page()\n");
-	//onion_response_set_length(res, 11);
 
 	char* notification_type = onion_request_get_query(req, "notification_type");
+    char* sound_name = onion_request_get_query(req, "sound_name");
     if (notification_type == NULL) {
         return onion_shortcut_response("Parameter notification_type is missing", HTTP_BAD_REQUEST, req, res);
     }
     if (strcmp(notification_type, "custom") == 0) {
-        return onion_shortcut_response("notification_type == custom", HTTP_BAD_REQUEST, req, res);
+        if (strnlen(sound_name, 1024) > 512) {
+            return onion_shortcut_response(
+                "sound_name is too long", HTTP_BAD_REQUEST, req, res
+            );    
+        }
+        char sound_name_path[1024] = "sound-repository/";
+        strcat(sound_name_path, sound_name);
+        play_sound(sound_name_path);
+        return onion_shortcut_response("notification_type == custom", HTTP_OK, req, res);
     } 
     else if (strcmp(notification_type, "chiming") == 0) {
-        return onion_shortcut_response("notification_type == chiming", HTTP_BAD_REQUEST, req, res);
+        play_sound("cuckoo-clock-sound-0727.mp3");
+        return onion_shortcut_response("notification_type == chiming", HTTP_OK, req, res);
     }
     else {
         return onion_shortcut_response("notification_type's value is invalid", HTTP_BAD_REQUEST, req, res);
@@ -61,7 +90,7 @@ int main(int argc, char **argv){
 	onion_set_port(o, "9527"); 	
 	onion_url *urls=onion_root_url(o);
 
-	onion_url_add(urls, "/", index_page);
+	onion_url_add(urls, "", index_page);
 	onion_url_add(urls, "akong/", index_page);
 	onion_url_add(urls, "^(.*)$", hello);
 
