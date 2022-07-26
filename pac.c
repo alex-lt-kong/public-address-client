@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <sys/wait.h> /* for waitpid */
 
+const char* sound_repository_path;
+
 int hello(void *p, onion_request *req, onion_response *res){
 	//onion_response_set_length(res, 11);
 	onion_response_write0(res,"Hello world");
@@ -22,31 +24,38 @@ int hello(void *p, onion_request *req, onion_response *res){
 }
 int play_sound(char* sound_name) {
     if (strnlen(sound_name, 1024) > 512 + 256) {
-        return -1;
+        return 1;
     }
-    char sound_path[1024] = "../";
+    char* sound_path = sound_repository_path;
     strcat(sound_path, sound_name);
-    printf("sound_path is %s\n", sound_path);
+    char* sound_realpath = realpath(sound_path, NULL);
+    if (sound_realpath == NULL) {
+        fprintf(stderr, "sound_realpath == NULL");
+        return 2;
+    }
+    printf("sound_realpath is %s\n", sound_realpath);
     // https://stackoverflow.com/questions/5460421/how-do-you-write-a-c-program-to-execute-another-program
     /*Spawn a child to run the program.*/
     pid_t pid = fork();
     if (pid == 0) { /* child process */
-        printf("pid == 0!\n");
-        static char *argv[]={"echo","Foo is my name.",NULL};
-        execv("/bin/echo",argv);
+        char* argv[]={"mpg123","-o", "alsa:hw:1,0", sound_realpath, NULL};
+        int rc = execv("/usr/bin/mpg123",argv);
+        free(sound_realpath);
         return 127;
     }
     else { /* pid!=0; parent process */
-        printf("pid != 0!\n");
-        waitpid(pid, 0, 0); /* wait for child to exit */
+        //waitpid(pid, 0, 0); /* wait for child to exit */
+        //let's just return, dont wait
+        free(sound_realpath);
+        return 0;
     }
+    // how to use mmap() to share global variables?
 }
 
 int index_page(void *p, onion_request *req, onion_response *res){
 
-	char* notification_type = onion_request_get_query(req, "notification_type");
-    const char* sn = "sound_name";
-    char* sound_name = onion_request_get_query(req, sn);
+	const char* notification_type = onion_request_get_query(req, "notification_type");
+    const char* sound_name = onion_request_get_query(req, "sound_name");
     if (notification_type == NULL) {
         return onion_shortcut_response("Parameter notification_type is missing", HTTP_BAD_REQUEST, req, res);
     }
@@ -56,9 +65,9 @@ int index_page(void *p, onion_request *req, onion_response *res){
                 "sound_name invalid (NULL or too long)", HTTP_BAD_REQUEST, req, res
             );    
         }
-        char sound_name_path[1024] = "sound-repository/";
-        strcat(sound_name_path, sound_name);
-        play_sound(sound_name_path);
+        char custom_sound_name[1024] = "custom-event/";
+        strcat(custom_sound_name, sound_name);
+        play_sound(custom_sound_name);
         return onion_shortcut_response("notification_type == custom", HTTP_OK, req, res);
     } 
     else if (strcmp(notification_type, "chiming") == 0) {
@@ -81,6 +90,11 @@ static void shutdown_server(int _){
 }
 
 int main(int argc, char **argv){
+    if (argc != 2) {
+        fprintf(stderr, "sound_repository not specified");
+        return 1;
+    }
+    sound_repository_path = argv[1];
 	signal(SIGINT,shutdown_server);
 	signal(SIGTERM,shutdown_server);
 
