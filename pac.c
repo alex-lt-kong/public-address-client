@@ -26,6 +26,7 @@ int play_sound(char* sound_name) {
     }
     char sound_path[1024] = "../";
     strcat(sound_path, sound_name);
+    printf("sound_path is %s\n", sound_path);
     // https://stackoverflow.com/questions/5460421/how-do-you-write-a-c-program-to-execute-another-program
     /*Spawn a child to run the program.*/
     pid_t pid = fork();
@@ -44,14 +45,15 @@ int play_sound(char* sound_name) {
 int index_page(void *p, onion_request *req, onion_response *res){
 
 	char* notification_type = onion_request_get_query(req, "notification_type");
-    char* sound_name = onion_request_get_query(req, "sound_name");
+    const char* sn = "sound_name";
+    char* sound_name = onion_request_get_query(req, sn);
     if (notification_type == NULL) {
         return onion_shortcut_response("Parameter notification_type is missing", HTTP_BAD_REQUEST, req, res);
     }
     if (strcmp(notification_type, "custom") == 0) {
-        if (strnlen(sound_name, 1024) > 512) {
+        if (sound_name == NULL || strnlen(sound_name, 1024) > 512) {
             return onion_shortcut_response(
-                "sound_name is too long", HTTP_BAD_REQUEST, req, res
+                "sound_name invalid (NULL or too long)", HTTP_BAD_REQUEST, req, res
             );    
         }
         char sound_name_path[1024] = "sound-repository/";
