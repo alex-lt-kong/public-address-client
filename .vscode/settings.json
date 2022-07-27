@@ -5,6 +5,7 @@
   "python.languageServer": "Pylance",
   "python.pythonPath": "/usr/bin/python3",
   "files.associations": {
-    "string": "c"
+    "string": "c",
+    "log.h": "c"
   }
 }

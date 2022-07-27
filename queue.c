@@ -22,14 +22,31 @@ int get_queue_size() {
   return (MAX_SOUND_QUEUE_SIZE + *rear_ptr - *front_ptr) % MAX_SOUND_QUEUE_SIZE;
 }
 
-void list_queue_items() {
-    printf(
-      "Current sound_queue (front_ptr: %d, rear_prt: %d, size: %d, MAX_SOUND_QUEUE_SIZE: %d):\n",
+/**
+ * @brief Caller needs to free() the returned char pointer
+ * 
+ */
+char* list_queue_items() {
+    char* queue_str = malloc(MAX_SOUND_QUEUE_SIZE * (NAME_MAX + 32) * sizeof(char));
+    size_t queue_str_len = 0;
+
+    if (queue_str == NULL) { return NULL; }
+    queue_str_len += sprintf(
+      queue_str+queue_str_len,
+      "===== sound_queue (front_ptr: %d, rear_ptr: %d, size: %d, MAX_SOUND_QUEUE_SIZE: %d) =====\n",
       *front_ptr, *rear_ptr, get_queue_size(), MAX_SOUND_QUEUE_SIZE - 1
     );
     for (int i = *front_ptr; i < *front_ptr + get_queue_size(); ++i) {
-        printf("%d: %s\n", i, sound_queue[i % MAX_SOUND_QUEUE_SIZE]);
+        queue_str_len += sprintf(
+          queue_str+queue_str_len, "%d: %s\n", i, sound_queue[i % MAX_SOUND_QUEUE_SIZE]
+        );
     }
+    queue_str_len += sprintf(
+      queue_str+queue_str_len,
+      "===== sound_queue (front_ptr: %d, rear_ptr: %d, size: %d, MAX_SOUND_QUEUE_SIZE: %d) =====\n",
+      *front_ptr, *rear_ptr, get_queue_size(), MAX_SOUND_QUEUE_SIZE - 1
+    );
+    return queue_str;
 }
 
 bool enqueue(const char* sound_name) {

@@ -18,40 +18,58 @@ const char* sound_repository_path;
 pthread_mutex_t lock;
 
 void* handle_sound_name_queue() {
-    start_label:;
-    list_queue_items();
-    char* sound_name = peek();
-    if (sound_name == NULL) {
-        fprintf(stderr, "queue is already empty/memory allocation failed\n");
-    }
-    if (strnlen(sound_name, NAME_MAX) >= NAME_MAX) {
-        fprintf(stderr, "sound_name too long\n");
-    }
-    char sound_path[PATH_MAX] = "", sound_realpath[PATH_MAX];
-    strcat(sound_path, sound_repository_path);
-    strcat(sound_path, sound_name);
-    free(sound_name);
-    realpath(sound_path, sound_realpath);
-    if (sound_realpath == NULL) {
-        fprintf(stderr, "sound_realpath == NULL\n");
-    }
-    
-    // https://stackoverflow.com/questions/5460421/how-do-you-write-a-c-program-to-execute-another-program
-    pid_t pid = fork();
-    if (pid == 0) { /* child process */
-        //char* argv[]={"mpg123", "-o", "alsa:hw:1,0", sound_realpath, NULL};
-        char* argv[]={"mpg123", sound_realpath, NULL};
-        execv("/usr/bin/mpg123",argv); // this call only returns if an error occurs!
-        exit(1);
-    } else { /* pid!=0; parent process */
-        waitpid(pid, 0, 0); /* wait for child to exit */
-        pthread_mutex_lock(&lock);
-        dequeue();        
-        if (get_queue_size() > 0) {
-            pthread_mutex_unlock(&lock);
-            goto start_label;
-        }
+    while (1) {
+        char* queue_str = list_queue_items();
+        printf("%s", queue_str);
+        free(queue_str);
+        size_t qs = get_queue_size();
         pthread_mutex_unlock(&lock);
+        if (qs == 0) {
+            onion_log_stderr(O_INFO, "pac.c", 25, "sound_name_queue cleared, thread quited\n");
+            break;
+        }
+
+        char* sound_name = peek();
+        if (sound_name == NULL) {
+            onion_log_stderr(
+                O_ERROR, "pac.c", 25,
+                "Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed\n", sound_name
+            );
+            pthread_mutex_lock(&lock);
+            dequeue();
+            continue;
+        }
+        if (strnlen(sound_name, NAME_MAX) >= NAME_MAX) {
+            onion_log_stderr(
+                O_ERROR, "pac.c", 25,
+                "sound_name [%s] too long. The 1st item  will be directly dequeue()'ed\n", sound_name
+            );
+            pthread_mutex_lock(&lock);
+            dequeue();
+            continue;
+        }
+
+        char sound_path[PATH_MAX] = "", sound_realpath[PATH_MAX];
+        strcat(sound_path, sound_repository_path);
+        strcat(sound_path, sound_name);
+        free(sound_name);
+        realpath(sound_path, sound_realpath);
+        if (sound_realpath == NULL) {
+            onion_log_stderr(O_ERROR, "pac.c", 48, "sound_realpath == NULL. It will be directly dequeue()'ed\n");
+        }
+        
+        // https://stackoverflow.com/questions/5460421/how-do-you-write-a-c-program-to-execute-another-program
+        pid_t pid = fork();
+        if (pid == 0) { /* child process */
+            //char* argv[]={"mpg123", "-o", "alsa:hw:1,0", sound_realpath, NULL};
+            char* argv[]={"mpg123", sound_realpath, NULL};
+            execv("/usr/bin/mpg123",argv); // this call only returns if an error occurs!
+            exit(1);
+        } else { /* pid!=0; parent process */
+            waitpid(pid, 0, 0); /* wait for child to exit */
+            pthread_mutex_lock(&lock);
+            dequeue();
+        }
     }
 }
 
@@ -79,11 +97,13 @@ int index_page(void *p, onion_request *req, onion_response *res) {
             strcat(custom_sound_name, sound_name);
         }
         pthread_mutex_lock(&lock);
+        int qs = get_queue_size();
         if (enqueue(custom_sound_name)) {
-            list_queue_items();
-            int qs = get_queue_size();
+            char* queue_str = list_queue_items();
+            printf("%s", queue_str);
+            free(queue_str);     
             pthread_mutex_unlock(&lock);
-            if (get_queue_size() == 1) {                
+            if (qs == 0) { // i.e., before enqueue() the queue is empty, so we start a new handle_sound_name_queue thread.
                 pthread_t my_thread;
                 pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL); // no parentheses here 
             }
@@ -113,16 +133,16 @@ static void shutdown_server(int _){
 
 int main(int argc, char **argv){
     if (argc != 3) {
-        fprintf(stderr, "usage: [sound_repository] [port]");
+        onion_log_stderr(O_ERROR, "pac.c", 116, "usage: [sound_repository] [port]");
         return 1;
     } else if (strnlen(argv[1], PATH_MAX) >= PATH_MAX / 2) {
-        fprintf(stderr, "sound_repository too long");
+        onion_log_stderr(O_ERROR, "pac.c", 119, "sound_repository [%s] too long\n", argv[1]);
         return 2;
     }
     
     sound_repository_path = argv[1];
     if (pthread_mutex_init(&lock, NULL) != 0) {
-        fprintf(stderr, "mutex init failed\n.");
+        onion_log_stderr(O_ERROR, "pac.c", 125, "Failed to initialize a mutex\n");
         return 3;
     }
 
@@ -140,7 +160,7 @@ int main(int argc, char **argv){
     onion_url_add(urls, "", index_page);
     onion_url_add(urls, "health_check/", health_check);
     
-
+    onion_log_stderr(O_INFO, "pac.c", 143, "Public address client listening on %s", argv[2]);
 	onion_listen(o);
 	onion_free(o);
     finalize_queue();
