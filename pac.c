@@ -132,12 +132,12 @@ int main(int argc, char **argv){
 	ONION_VERSION_IS_COMPATIBLE_OR_ABORT();
     
     initialize_queue();
-	o=onion_new(O_THREADED);
-	onion_set_timeout(o, 5000);
-	onion_set_hostname(o,"0.0.0.0");
-	onion_set_port(o, argv[2]); 	
-	onion_url *urls=onion_root_url(o);
-	onion_url_add(urls, "", index_page);
+    o=onion_new(O_THREADED);
+    onion_set_timeout(o, 5000);
+    onion_set_hostname(o,"0.0.0.0");
+    onion_set_port(o, argv[2]); 	
+    onion_url *urls=onion_root_url(o);
+    onion_url_add(urls, "", index_page);
     onion_url_add(urls, "health_check/", health_check);
     
 
