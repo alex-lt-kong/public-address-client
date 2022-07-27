@@ -11,9 +11,11 @@
 #include <stdio.h>
 #include <sys/wait.h> /* for waitpid */
 #include <pthread.h>
+
 #include "queue.c"
 
 const char* sound_repository_path;
+pthread_mutex_t lock;
 
 void* handle_sound_name_queue() {
     start_label:;
@@ -43,15 +45,21 @@ void* handle_sound_name_queue() {
         exit(1);
     } else { /* pid!=0; parent process */
         waitpid(pid, 0, 0); /* wait for child to exit */
-        dequeue();
-        
+        pthread_mutex_lock(&lock);
+        dequeue();        
         if (get_queue_size() > 0) {
+            pthread_mutex_unlock(&lock);
             goto start_label;
         }
+        pthread_mutex_unlock(&lock);
     }
 }
 
-int index_page(void *p, onion_request *req, onion_response *res){
+int health_check(void *p, onion_request *req, onion_response *res) {
+    return onion_shortcut_response("Client is up and running.\n", HTTP_OK, req, res);
+}
+
+int index_page(void *p, onion_request *req, onion_response *res) {
 	const char* notification_type = onion_request_get_query(req, "notification_type");
     const char* sound_name = onion_request_get_query(req, "sound_name");
     if (notification_type == NULL) {
@@ -70,21 +78,25 @@ int index_page(void *p, onion_request *req, onion_response *res){
             strcat(custom_sound_name, "custom-event/");
             strcat(custom_sound_name, sound_name);
         }
+        pthread_mutex_lock(&lock);
         if (enqueue(custom_sound_name)) {
             list_queue_items();
+            int qs = get_queue_size();
+            pthread_mutex_unlock(&lock);
+            if (get_queue_size() == 1) {                
+                pthread_t my_thread;
+                pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL); // no parentheses here 
+            }
+            onion_response_printf(
+                res, "OK, sound [%s] added to sound_queue, notification_type == [%s]", custom_sound_name, notification_type
+            );
+            return OCS_PROCESSED;
         } else {
+            pthread_mutex_unlock(&lock);
             return onion_shortcut_response(
                 "queue is full/server has not enough free memory, new sound discarded.\n", HTTP_BAD_REQUEST, req, res
             );
         }
-        if (get_queue_size() == 1) {
-            pthread_t my_thread;
-            pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL); // no parentheses here 
-        }
-        onion_response_printf(
-            res, "OK, sound [%s] added to sound_queue, notification_type == [%s]", custom_sound_name, notification_type
-        );
-	    return OCS_PROCESSED;
     }
     onion_response_printf(res, "notification_type's value [%s] is invalid\n", notification_type);
 	return OCS_PROCESSED;
@@ -109,11 +121,16 @@ int main(int argc, char **argv){
     }
     
     sound_repository_path = argv[1];
-    
+    if (pthread_mutex_init(&lock, NULL) != 0) {
+        fprintf(stderr, "mutex init failed\n.");
+        return 3;
+    }
+
 	signal(SIGINT,shutdown_server);
 	signal(SIGTERM,shutdown_server);
 
 	ONION_VERSION_IS_COMPATIBLE_OR_ABORT();
+    
     initialize_queue();
 	o=onion_new(O_THREADED);
 	onion_set_timeout(o, 5000);
@@ -121,9 +138,12 @@ int main(int argc, char **argv){
 	onion_set_port(o, argv[2]); 	
 	onion_url *urls=onion_root_url(o);
 	onion_url_add(urls, "", index_page);
+    onion_url_add(urls, "health_check/", health_check);
+    
 
 	onion_listen(o);
 	onion_free(o);
     finalize_queue();
+    pthread_mutex_destroy(&lock);
 	return 0;
 }

@@ -1,17 +1,16 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h> /* for mmap    */
 
-#define MAX_SOUND_QUEUE_SIZE 64
+#define MAX_SOUND_QUEUE_SIZE 2048
 char** sound_queue = NULL;
 int* front_ptr = NULL;
 int* rear_ptr = NULL;
 
 int initialize_queue() {
-  sound_queue = mmap(NULL, MAX_SOUND_QUEUE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-  front_ptr = (int*)mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); 
-  rear_ptr  = (int*)mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); 
+  sound_queue = malloc(MAX_SOUND_QUEUE_SIZE * sizeof(char*));
+  front_ptr = malloc(sizeof(int)); 
+  rear_ptr  = malloc(sizeof(int)); 
   *front_ptr = 0;
   *rear_ptr = 0;
 }
@@ -34,7 +33,7 @@ void list_queue_items() {
 }
 
 bool enqueue(const char* sound_name) {
-  if (get_queue_size() >= MAX_SOUND_QUEUE_SIZE - 1) {
+  if (sound_queue == NULL || get_queue_size() >= MAX_SOUND_QUEUE_SIZE - 1) {
     return false;
     /*
     Per current design, the available slot of the queue is MAX_SOUND_QUEUE_SIZE - 1
@@ -82,15 +81,9 @@ void finalize_queue() {
   while(get_queue_size() > 0) {
     dequeue();
   }
-  if (sound_queue != NULL) {
-    free(sound_queue);
-  }
-  if (front_ptr != NULL) {
-    free(front_ptr);
-  }
-  if (rear_ptr != NULL) {
-    free(rear_ptr);
-  }
+  free(sound_queue);
+  free(front_ptr);
+  free(rear_ptr);
   sound_queue = NULL;
   front_ptr = NULL;
   rear_ptr = NULL;
