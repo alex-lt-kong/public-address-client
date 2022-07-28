@@ -43,7 +43,7 @@ int index_page(void *p, onion_request *req, onion_response *res) {
       strcat(custom_sound_name, "cuckoo-clock-sound-0727.mp3");
     } else {
         if (sound_name == NULL || strnlen(sound_name, NAME_MAX) > NAME_MAX) {
-            snprintf(err_msg, PATH_MAX, "sound_name invalid (NULL or too long)\n");
+            snprintf(err_msg, PATH_MAX, "sound_name invalid (NULL or too long)");
             onion_log_stderr(O_WARNING, "pac.c", 137, err_msg);
             return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
         }
@@ -66,7 +66,7 @@ int index_page(void *p, onion_request *req, onion_response *res) {
       return onion_shortcut_response(info_msg, HTTP_OK, req, res);
     } else {
       pthread_mutex_unlock(&lock);
-      snprintf(err_msg, PATH_MAX, "queue is full/server has not enough free memory, new sound discarded.\n");
+      snprintf(err_msg, PATH_MAX, "queue is full/server has not enough free memory, new sound discarded.");
       onion_log_stderr(O_WARNING, "pac.c", 160, err_msg);
       return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
     }

@@ -108,7 +108,7 @@ void* handle_sound_name_queue() {
         size_t qs = get_queue_size();
         pthread_mutex_unlock(&lock);
         if (qs == 0) {
-          onion_log_stderr(O_INFO, "utils.c", 80, "sound_name_queue cleared, thread quited\n");
+          onion_log_stderr(O_INFO, "utils.c", 80, "sound_name_queue cleared, thread quited");
           break;
         }
 
@@ -116,7 +116,7 @@ void* handle_sound_name_queue() {
         if (sound_name == NULL) {
           onion_log_stderr(
               O_ERROR, "utils.c", 80,
-              "Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed\n", sound_name
+              "Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed", sound_name
           );
           pthread_mutex_lock(&lock);
           dequeue();
@@ -125,7 +125,7 @@ void* handle_sound_name_queue() {
         if (strnlen(sound_name, NAME_MAX) >= NAME_MAX) {
           onion_log_stderr(
               O_ERROR, "utils.c", 90,
-              "sound_name [%s] too long. The 1st item  will be directly dequeue()'ed\n", sound_name
+              "sound_name [%s] too long. The 1st item  will be directly dequeue()'ed", sound_name
           );
           pthread_mutex_lock(&lock);
           dequeue();
@@ -138,18 +138,18 @@ void* handle_sound_name_queue() {
         free(sound_name);
         realpath(sound_path, sound_realpath);
         if (sound_realpath == NULL) {
-          onion_log_stderr(O_ERROR, "utils.c", 100, "sound_realpath == NULL. It will be directly dequeue()'ed\n");
+          onion_log_stderr(O_ERROR, "utils.c", 100, "sound_realpath == NULL. It will be directly dequeue()'ed");
         }
         FILE *fptr;
         if ((fptr = fopen(sound_realpath, "r"))) {
           fclose(fptr);
           onion_log_stderr(
-            O_INFO, "utils.c", 110, "Currently playing: [%s], current sound_queue_size: %d\n", sound_realpath, qs
+            O_INFO, "utils.c", 110, "Currently playing: [%s], current sound_queue_size: %d", sound_realpath, qs
           );
           play_sound(sound_realpath);
         } else {
           onion_log_stderr(
-            O_ERROR, "utils.c", 110, "sound_realpath is not NULL but the file does not exist. dequeue()'ed\n"
+            O_ERROR, "utils.c", 110, "sound_realpath is not NULL but the file does not exist. dequeue()'ed"
           );
         }        
         pthread_mutex_lock(&lock);
