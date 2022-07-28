@@ -28,7 +28,7 @@ int index_page(void *p, onion_request *req, onion_response *res) {
   char info_msg[PATH_MAX];
   if (authenticate(req, res) == false) {
     snprintf(err_msg, PATH_MAX, "Failed login attempt");
-    onion_log_stderr(O_WARNING, "pac.c", 30, err_msg);
+    ONION_WARNING(err_msg);
     return OCS_PROCESSED;
   }
 
@@ -42,13 +42,13 @@ int index_page(void *p, onion_request *req, onion_response *res) {
     if (strcmp(notification_type, "chiming") == 0) {
       strcat(custom_sound_name, "cuckoo-clock-sound-0727.mp3");
     } else {
-        if (sound_name == NULL || strnlen(sound_name, NAME_MAX) > NAME_MAX) {
-            snprintf(err_msg, PATH_MAX, "sound_name invalid (NULL or too long)");
-            onion_log_stderr(O_WARNING, "pac.c", 137, err_msg);
-            return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
-        }
-        strcat(custom_sound_name, "custom-event/");
-        strcat(custom_sound_name, sound_name);
+      if (sound_name == NULL || strnlen(sound_name, NAME_MAX) > NAME_MAX) {
+        snprintf(err_msg, PATH_MAX, "sound_name invalid (NULL or too long)");
+        ONION_WARNING(err_msg);
+        return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
+      }
+      strcat(custom_sound_name, "custom-event/");
+      strcat(custom_sound_name, sound_name);
     }
     pthread_mutex_lock(&lock);
     int qs = get_queue_size();
@@ -61,18 +61,18 @@ int index_page(void *p, onion_request *req, onion_response *res) {
       snprintf(
         info_msg, PATH_MAX, "[%s] added to sound_queue, notification_type == [%s], sound_queue_size: %d",
         custom_sound_name, notification_type, qs+1
-      );
-      onion_log_stderr(O_INFO, "pac.c", 160, info_msg);
+      );      
+      ONION_INFO(info_msg);
       return onion_shortcut_response(info_msg, HTTP_OK, req, res);
     } else {
       pthread_mutex_unlock(&lock);
       snprintf(err_msg, PATH_MAX, "queue is full/server has not enough free memory, new sound discarded.");
-      onion_log_stderr(O_WARNING, "pac.c", 160, err_msg);
+      ONION_WARNING(err_msg);
       return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
     }
   }
   snprintf(err_msg, PATH_MAX, "<meta charset=\"utf-8\">notification_type's value [%s] is invalid",notification_type);
-  onion_log_stderr(O_WARNING, "pac.c", 165, err_msg);
+  ONION_WARNING(err_msg);
   return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
 }
 
@@ -139,6 +139,9 @@ int main(int argc, char **argv){
     
     initialize_queue();
     o=onion_new(O_THREADED);
+    onion_set_timeout(o, 300 * 1000);
+    // We set this to a large number, hoping the client closes the connection itself
+    // If the server times out before client does, GnuTLS complains "The TLS connection was non-properly terminated."
     onion_set_certificate(o, O_SSL_CERTIFICATE_KEY, ssl_crt_path, ssl_key_path);
     onion_set_hostname(o, json_object_get_string(root_app_interface));
     onion_set_port(o, json_object_get_string(root_app_port));
