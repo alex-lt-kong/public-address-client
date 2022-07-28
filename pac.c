@@ -128,6 +128,9 @@ int main(int argc, char **argv){
     
     initialize_queue();
     o=onion_new(O_THREADED);
+    onion_set_certificate(
+      o, O_SSL_CERTIFICATE_KEY, "/etc/ssl/mamsds/apps-hk-lan-https-cert.crt", "/etc/ssl/mamsds/apps-hk-lan-https-cert.key"
+    );
     onion_set_hostname(o, json_object_get_string(root_app_interface));
     onion_set_port(o, json_object_get_string(root_app_port));
     onion_url *urls=onion_root_url(o);
