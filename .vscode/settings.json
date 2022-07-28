@@ -7,6 +7,7 @@
   "files.associations": {
     "string": "c",
     "log.h": "c",
-    "utils.h": "c"
+    "utils.h": "c",
+    "libgen.h": "c"
   }
 }

@@ -13,6 +13,7 @@
 #include <json-c/json.h>
 /* Check directory's existence*/
 #include <dirent.h>
+#include <libgen.h> /* dirname() */
 
 #include "utils.h"
 #include "queue.h"
@@ -90,7 +91,12 @@ int main(int argc, char **argv){
         onion_log_stderr(O_ERROR, "pac.c", 190, "Failed to initialize a mutex\n");
         return 1;
     }
-    json_object* root = json_object_from_file("settings.json");
+    char settings_path[PATH_MAX] = "";
+    char* rp = realpath(argv[0], NULL);
+    strcpy(settings_path, dirname(rp));
+    strcat(settings_path, "/settings.json");
+    free(rp);
+    json_object* root = json_object_from_file(settings_path);
     json_object* root_app = json_object_object_get(root, "app");
     json_object* root_app_port = json_object_object_get(root_app, "port");
     json_object* root_app_interface = json_object_object_get(root_app, "interface");
