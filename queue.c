@@ -1,8 +1,5 @@
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
+#include "queue.h"
 
-#define MAX_SOUND_QUEUE_SIZE 2048
 char** sound_queue = NULL;
 int* front_ptr = NULL;
 int* rear_ptr = NULL;
@@ -22,10 +19,6 @@ int get_queue_size() {
   return (MAX_SOUND_QUEUE_SIZE + *rear_ptr - *front_ptr) % MAX_SOUND_QUEUE_SIZE;
 }
 
-/**
- * @brief Caller needs to free() the returned char pointer
- * 
- */
 char* list_queue_items() {
     char* queue_str = malloc(MAX_SOUND_QUEUE_SIZE * (NAME_MAX + 32) * sizeof(char));
     size_t queue_str_len = 0;
@@ -69,10 +62,6 @@ bool enqueue(const char* sound_name) {
   return true;
 }
 
-/**
- * Return a pointer to sound_name at front_ptr or NULL in case of empty queue or memory allocation failure.
- * Caller needs to free() the char pointer after use.
-*/
 char* peek() {
   if (get_queue_size() <= 0) {
     return NULL;
