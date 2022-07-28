@@ -103,8 +103,8 @@ int main(int argc, char **argv){
     sound_repository_path = json_object_get_string(root_app_sound_repo_path);
     pac_username = json_object_get_string(root_app_username);
     pac_passwd = json_object_get_string(root_app_passwd);
-    char* ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
-    char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
+    const char* ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
+    const char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
     if (sound_repository_path == NULL || strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
       onion_log_stderr(
         O_ERROR, "pac.c", 100, "sound_repository [%s] is either NULL or too long\n", sound_repository_path
