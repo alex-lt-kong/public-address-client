@@ -88,7 +88,7 @@ static void shutdown_server(int _){
 int main(int argc, char **argv){
     
     if (pthread_mutex_init(&lock, NULL) != 0) {
-        onion_log_stderr(O_ERROR, "pac.c", 190, "Failed to initialize a mutex\n");
+        onion_log_stderr(O_ERROR, "pac.c", 190, "Failed to initialize a mutex");
         return 1;
     }
     char settings_path[PATH_MAX] = "";
@@ -113,12 +113,12 @@ int main(int argc, char **argv){
     const char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
     if (sound_repository_path == NULL || strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
       onion_log_stderr(
-        O_ERROR, "pac.c", 100, "sound_repository [%s] is either NULL or too long\n", sound_repository_path
+        O_ERROR, "pac.c", 100, "sound_repository [%s] is either NULL or too long", sound_repository_path
       );
       return 2;
     }
     if (pac_username == NULL || pac_passwd == NULL || ssl_crt_path == NULL || ssl_key_path == NULL) {
-      onion_log_stderr(O_ERROR, "pac.c", 110, "Either username, passwd, ssl_crt_path, ssl_key_path is not set\n");
+      onion_log_stderr(O_ERROR, "pac.c", 110, "Either username, passwd, ssl_crt_path, ssl_key_path is not set.");
       return 3;
     }
     DIR* dir = opendir(sound_repository_path);
@@ -127,7 +127,7 @@ int main(int argc, char **argv){
     } else {
       onion_log_stderr(
         O_ERROR, "pac.c", 100,
-        "sound_repository [%s] either doesn't exist or is inaccessible\n", sound_repository_path
+        "sound_repository [%s] either doesn't exist or is inaccessible.", sound_repository_path
       );
       return 3;
     }
