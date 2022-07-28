@@ -8,7 +8,46 @@
 #include "queue.h"
 
 const char* sound_repository_path;
+const char* pac_username;
+const char* pac_passwd;
 pthread_mutex_t lock;
+
+bool authenticate(onion_request *req, onion_response *res) {
+  const char *auth_header = onion_request_get_header(req, "Authorization");
+  char *auth = NULL;
+  char *supplied_username = NULL;
+  char *supplied_passwd = NULL;
+  bool is_authed = false;
+  if (auth_header && strncmp(auth_header, "Basic", 5) == 0) {
+    auth = onion_base64_decode(&auth_header[6], NULL);
+    supplied_username = auth;
+    int i = 0;
+    while (auth[i] != '\0' && auth[i] != ':') { i++; }    
+    if (auth[i] == ':') {
+        auth[i] = '\0'; // supplied_username is set to auth, we terminate auth to make supplied_username work
+        supplied_passwd = &auth[i + 1];
+    }
+    if (
+      supplied_username != NULL && supplied_passwd != NULL &&
+      strncmp(supplied_username, pac_username, strlen(pac_username)) == 0 &&
+      strncmp(supplied_passwd, pac_passwd, strlen(pac_passwd)) == 0
+    ) {
+      // C evaluates the && and || in a "short-circuit" manner. That is, for &&, if A in (A && B)
+      // is false, B will NOT be evaluated.
+      return true;
+    }
+  } 
+
+  const char RESPONSE_UNAUTHORIZED[] = "<h1>Unauthorized access</h1>";
+  // Not authorized. Ask for it.
+  char temp[256];
+  sprintf(temp, "Basic realm=PAC");
+  onion_response_set_header(res, "WWW-Authenticate", temp);
+  onion_response_set_code(res, HTTP_UNAUTHORIZED);
+  onion_response_set_length(res, sizeof(RESPONSE_UNAUTHORIZED));
+  onion_response_write(res, RESPONSE_UNAUTHORIZED, sizeof(RESPONSE_UNAUTHORIZED));
+  return false;
+}
 
 int play_sound(const char* sound_path) {
     // This function an its variants seems everywhere on the Internet, my version
