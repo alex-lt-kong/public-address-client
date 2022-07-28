@@ -26,7 +26,7 @@ char* list_queue_items() {
     if (queue_str == NULL) { return NULL; }
     queue_str_len += sprintf(
       queue_str+queue_str_len,
-      "===== sound_queue (front_ptr: %d, rear_ptr: %d, size: %d, MAX_SOUND_QUEUE_SIZE: %d) =====\n",
+      "=====\n",
       *front_ptr, *rear_ptr, get_queue_size(), MAX_SOUND_QUEUE_SIZE - 1
     );
     for (int i = *front_ptr; i < *front_ptr + get_queue_size(); ++i) {
