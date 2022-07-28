@@ -97,17 +97,22 @@ int main(int argc, char **argv){
     json_object* root_app_sound_repo_path = json_object_object_get(root_app, "sound_repo_path");
     json_object* root_app_username = json_object_object_get(root_app, "username");
     json_object* root_app_passwd = json_object_object_get(root_app, "passwd");
+    json_object* root_app_ssl = json_object_object_get(root_app, "ssl");
+    json_object* root_app_ssl_crt_path = json_object_object_get(root_app_ssl, "crt_path");
+    json_object* root_app_ssl_key_path = json_object_object_get(root_app_ssl, "key_path");
     sound_repository_path = json_object_get_string(root_app_sound_repo_path);
     pac_username = json_object_get_string(root_app_username);
     pac_passwd = json_object_get_string(root_app_passwd);
+    char* ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
+    char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
     if (sound_repository_path == NULL || strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
       onion_log_stderr(
         O_ERROR, "pac.c", 100, "sound_repository [%s] is either NULL or too long\n", sound_repository_path
       );
       return 2;
     }
-    if (pac_username == NULL || pac_passwd == NULL) {
-      onion_log_stderr(O_ERROR, "pac.c", 110, "Either username or passwd is not set\n");
+    if (pac_username == NULL || pac_passwd == NULL || ssl_crt_path == NULL || ssl_key_path == NULL) {
+      onion_log_stderr(O_ERROR, "pac.c", 110, "Either username, passwd, ssl_crt_path, ssl_key_path is not set\n");
       return 3;
     }
     DIR* dir = opendir(sound_repository_path);
@@ -128,9 +133,7 @@ int main(int argc, char **argv){
     
     initialize_queue();
     o=onion_new(O_THREADED);
-    onion_set_certificate(
-      o, O_SSL_CERTIFICATE_KEY, "/etc/ssl/mamsds/apps-hk-lan-https-cert.crt", "/etc/ssl/mamsds/apps-hk-lan-https-cert.key"
-    );
+    onion_set_certificate(o, O_SSL_CERTIFICATE_KEY, ssl_crt_path, ssl_key_path);
     onion_set_hostname(o, json_object_get_string(root_app_interface));
     onion_set_port(o, json_object_get_string(root_app_port));
     onion_url *urls=onion_root_url(o);
