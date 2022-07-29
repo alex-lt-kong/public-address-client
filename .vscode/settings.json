@@ -8,6 +8,7 @@
     "string": "c",
     "log.h": "c",
     "utils.h": "c",
-    "libgen.h": "c"
+    "libgen.h": "c",
+    "queue.h": "c"
   }
 }

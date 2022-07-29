@@ -1,11 +1,13 @@
-main: ./src/pac.c ./src/queue.o ./src/utils.o
-	gcc ./src/pac.c ./src/queue.o ./src/utils.o -O3 -o ./pac.out -lonion -lpthread -lmpg123 -lao -ljson-c
+SRC_DIR = ./src
 
-queue.o: ./src/queue.c ./src/queue.h
-	gcc ./src/queue.c -c -O3
+main: $(SRC_DIR)/main.c $(SRC_DIR)/queue.o $(SRC_DIR)/utils.o
+	gcc $(SRC_DIR)/main.c $(SRC_DIR)/queue.o $(SRC_DIR)/utils.o -O3 -o ./pac.out -lonion -lpthread -lmpg123 -lao -ljson-c
 
-utils.o: ./src/utils.c ./src/utils.h
-	gcc ./src/utils.c -c -O3
+queue.o: $(SRC_DIR)/queue.c $(SRC_DIR)/queue.h
+	gcc $(SRC_DIR)/queue.c -c -O3
+
+utils.o: $(SRC_DIR)/utils.c $(SRC_DIR)/utils.h
+	gcc $(SRC_DIR)/utils.c -c -O3
 
 clean:
-	rm *.out *.o ./src/*.out ./src/*.o
+	rm *.out $(SRC_DIR)/*.o
