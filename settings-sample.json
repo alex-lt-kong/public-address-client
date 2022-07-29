@@ -1,14 +1,14 @@
 {
     "app": {
-        "sound_repo_path": "/tmp/public-address-client/sound-repository/",
-        "log_path": "/var/log/public-address-client.log",
-        "mpg123_path": "/usr/bin/mpg123"
-    },
-    "email": {
-        "from_address": "",
-        "from_password": "",
-        "from_name": "Public Address Client () Notification Service",
-        "to_address": "",
-        "to_name": ""
+        "port": "8080",
+        "interface": "0.0.0.0",
+        "username": "pac_user",
+        "passwd": "pac_passwd",
+        "ssl": {
+            "key_path": "/etc/ssl/pac.key",
+            "crt_path": "/etc/ssl/pac.crt"
+        },
+        "sound_repo_path": "/mnt/sound-repo/",
+        "log_path": "/var/log/public-address-client.log"
     }
 }
