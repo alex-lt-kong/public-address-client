@@ -30,4 +30,4 @@ void* handle_sound_name_queue();
 
 bool is_file_accessible(const char* file_path);
 
-#endif /* QUEUE_H */
+#endif /* UTILS_H */

@@ -14,18 +14,18 @@ pthread_mutex_t lock;
 
 bool authenticate(onion_request *req, onion_response *res) {
   const char *auth_header = onion_request_get_header(req, "Authorization");
-  char *auth = NULL;
+  char *auth_header_val = NULL;
   char *supplied_username = NULL;
   char *supplied_passwd = NULL;
   bool is_authed = false;
   if (auth_header && strncmp(auth_header, "Basic", 5) == 0) {
-    auth = onion_base64_decode(&auth_header[6], NULL);
-    supplied_username = auth;
+    auth_header_val = onion_base64_decode(&auth_header[6], NULL);
+    supplied_username = auth_header_val;
     int i = 0;
-    while (auth[i] != '\0' && auth[i] != ':') { i++; }    
-    if (auth[i] == ':') {
-        auth[i] = '\0'; // supplied_username is set to auth, we terminate auth to make supplied_username work
-        supplied_passwd = &auth[i + 1];
+    while (auth_header_val[i] != '\0' && auth_header_val[i] != ':') { i++; }    
+    if (auth_header_val[i] == ':') {
+        auth_header_val[i] = '\0'; // supplied_username is set to auth_header_val, we terminate auth to make supplied_username work
+        supplied_passwd = &auth_header_val[i + 1];
     }
     if (
       supplied_username != NULL && supplied_passwd != NULL &&
@@ -34,6 +34,9 @@ bool authenticate(onion_request *req, onion_response *res) {
     ) {
       // C evaluates the && and || in a "short-circuit" manner. That is, for &&, if A in (A && B)
       // is false, B will NOT be evaluated.
+      supplied_username = NULL;
+      supplied_passwd = NULL;
+      free(auth_header_val);
       return true;
     }
   } 
@@ -101,40 +104,40 @@ int play_sound(const char* sound_path) {
 }
 
 void* handle_sound_name_queue() {
-    char* sound_realpath = NULL;
-    while (1) {
-        char* queue_str = list_queue_items();
-        printf("%s", queue_str);
-        free(queue_str);
-        size_t qs = get_queue_size();
-        pthread_mutex_unlock(&lock);
-        if (qs == 0) {
-          onion_log_stderr(O_INFO, "utils.c", 80, "sound_name_queue cleared, thread quited");
-          break;
-        }
-        free(sound_realpath);
-        sound_realpath = peek();
-        if (sound_realpath == NULL) {
-          ONION_ERROR("Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed", sound_realpath);
-          pthread_mutex_lock(&lock);
-          dequeue();
-          continue;
-        }
-        if (strnlen(sound_realpath, PATH_MAX) >= PATH_MAX) {
-          ONION_ERROR("sound_realpath [%s] too long. It will be directly dequeue()'ed", sound_realpath);
-          pthread_mutex_lock(&lock);
-          dequeue();
-          continue;
-        }       
-
-        ONION_INFO("Currently playing: [%s], current sound_queue_size: %d", sound_realpath, qs);
-        // We dont check file accessibility here, this is checked on index_page()
-        // mpg123/ao will return if the file does not exist without breaking the program
-        play_sound(sound_realpath);
-
-        pthread_mutex_lock(&lock);
-        dequeue();
+  char* sound_realpath = NULL;
+  while (1) {
+    char* queue_str = list_queue_items();
+    printf("%s", queue_str);
+    free(queue_str);
+    size_t qs = get_queue_size();
+    pthread_mutex_unlock(&lock);
+    if (qs == 0) {
+      ONION_INFO("sound_name_queue cleared, thread quited");
+      break;
     }
+    free(sound_realpath);
+    sound_realpath = peek();
+    if (sound_realpath == NULL) {
+      ONION_ERROR("Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed", sound_realpath);
+      pthread_mutex_lock(&lock);
+      dequeue();
+      continue;
+    }
+    if (strnlen(sound_realpath, PATH_MAX) >= PATH_MAX) {
+      ONION_ERROR("sound_realpath [%s] too long. It will be directly dequeue()'ed", sound_realpath);
+      pthread_mutex_lock(&lock);
+      dequeue();
+      continue;
+    }       
+
+    ONION_INFO("Currently playing: [%s], current sound_queue_size: %d", sound_realpath, qs);
+    // We dont check file accessibility here, this is checked on index_page()
+    // mpg123/ao will return if the file does not exist without breaking the program
+    play_sound(sound_realpath);
+
+    pthread_mutex_lock(&lock);
+    dequeue();
+  }
 }
 
 bool is_file_accessible(const char* file_path) {

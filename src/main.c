@@ -84,73 +84,85 @@ static void shutdown_server(int _){
 }
 
 
-int main(int argc, char **argv){
-    
-    if (pthread_mutex_init(&lock, NULL) != 0) {
-        onion_log_stderr(O_ERROR, "pac.c", 190, "Failed to initialize a mutex");
-        return 1;
-    }
-    char settings_path[PATH_MAX] = "";
-    char* rp = realpath(argv[0], NULL);
-    strcpy(settings_path, dirname(rp));
-    strcat(settings_path, "/settings.json");
-    free(rp);
-    json_object* root = json_object_from_file(settings_path);
-    json_object* root_app = json_object_object_get(root, "app");
-    json_object* root_app_port = json_object_object_get(root_app, "port");
-    json_object* root_app_interface = json_object_object_get(root_app, "interface");
-    json_object* root_app_sound_repo_path = json_object_object_get(root_app, "sound_repo_path");
-    json_object* root_app_username = json_object_object_get(root_app, "username");
-    json_object* root_app_passwd = json_object_object_get(root_app, "passwd");
-    json_object* root_app_ssl = json_object_object_get(root_app, "ssl");
-    json_object* root_app_ssl_crt_path = json_object_object_get(root_app_ssl, "crt_path");
-    json_object* root_app_ssl_key_path = json_object_object_get(root_app_ssl, "key_path");
-    sound_repository_path = json_object_get_string(root_app_sound_repo_path);
-    pac_username = json_object_get_string(root_app_username);
-    pac_passwd = json_object_get_string(root_app_passwd);
-    const char* ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
-    const char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
-    if (sound_repository_path == NULL || strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
-      ONION_ERROR("sound_repository [%s] is either NULL or too long", sound_repository_path);
-      return 2;
-    }
-    if (pac_username == NULL || pac_passwd == NULL || ssl_crt_path == NULL || ssl_key_path == NULL) {
-      onion_log_stderr(O_ERROR, "pac.c", 110, "Either username, passwd, ssl_crt_path, ssl_key_path is not set.");
-      return 3;
-    }
-    DIR* dir = opendir(sound_repository_path);
-    if (dir) { // exist
-      closedir(dir);
-    } else {
-      ONION_ERROR("sound_repository [%s] is inaccessible.", sound_repository_path);
-      return 4;
-    }
+int main(int argc, char **argv) {
 
-    signal(SIGINT,shutdown_server);
-    signal(SIGTERM,shutdown_server);
+  char bin_path[PATH_MAX], settings_path[PATH_MAX] = "";
+  realpath(argv[0], bin_path);
+  strcpy(settings_path, dirname(bin_path));
+  strcat(settings_path, "/settings.json");
+  json_object* root = json_object_from_file(settings_path);
+  json_object* root_app = json_object_object_get(root, "app");
+  json_object* root_app_port = json_object_object_get(root_app, "port");
+  json_object* root_app_interface = json_object_object_get(root_app, "interface");
+  json_object* root_app_sound_repo_path = json_object_object_get(root_app, "sound_repo_path");
+  json_object* root_app_username = json_object_object_get(root_app, "username");
+  json_object* root_app_passwd = json_object_object_get(root_app, "passwd");
+  json_object* root_app_ssl = json_object_object_get(root_app, "ssl");
+  json_object* root_app_ssl_crt_path = json_object_object_get(root_app_ssl, "crt_path");
+  json_object* root_app_ssl_key_path = json_object_object_get(root_app_ssl, "key_path");
+  json_object* root_app_log_path = json_object_object_get(root_app, "log_path");
+  
+  sound_repository_path = json_object_get_string(root_app_sound_repo_path);
+  pac_username = json_object_get_string(root_app_username);
+  pac_passwd = json_object_get_string(root_app_passwd);
+  const char* log_path = json_object_get_string(root_app_log_path);
+  const char* ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
+  const char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
 
-    ONION_VERSION_IS_COMPATIBLE_OR_ABORT();
-    
-    initialize_queue();
-    o=onion_new(O_THREADED);
-    onion_set_timeout(o, 300 * 1000);
-    // We set this to a large number, hoping the client closes the connection itself
-    // If the server times out before client does, GnuTLS complains "The TLS connection was non-properly terminated."
-    onion_set_certificate(o, O_SSL_CERTIFICATE_KEY, ssl_crt_path, ssl_key_path);
-    onion_set_hostname(o, json_object_get_string(root_app_interface));
-    onion_set_port(o, json_object_get_string(root_app_port));
-    onion_url *urls=onion_root_url(o);
-    onion_url_add(urls, "", index_page);
-    onion_url_add(urls, "health_check/", health_check);
-    
-    ONION_INFO(
-      "Public address client listening on %s:%s",
-      json_object_get_string(root_app_interface), json_object_get_string(root_app_port)
-    );
-    onion_listen(o);
-    onion_free(o);
-    finalize_queue();
-    json_object_put(root);
-    pthread_mutex_destroy(&lock);
-    return 0;
+  if (sound_repository_path == NULL || strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
+    ONION_ERROR("sound_repository [%s] is either NULL or too long", sound_repository_path);
+    return 2;
+  }
+  if (
+    log_path ==NULL || pac_username == NULL || pac_passwd == NULL ||
+    ssl_crt_path == NULL || ssl_key_path == NULL
+  ) {
+    ONION_ERROR("Either root_app_log_path, username, passwd, ssl_crt_path, ssl_key_path is not set.");
+    return 3;
+  }
+  DIR* dir = opendir(sound_repository_path);
+  if (dir) { // exist
+    closedir(dir);
+  } else {
+    ONION_ERROR("sound_repository [%s] is inaccessible.", sound_repository_path);
+    return 4;
+  }
+  if (pthread_mutex_init(&lock, NULL) != 0) {
+      ONION_ERROR("Failed to initialize a mutex");
+      return 5;
+  }
+  if (argc == 2 && strcmp(argv[1], "--debug") == 0) {
+    fprintf(stderr, "Debug mode enabled, the only change is that log will be sent to stderr instead of a log file\n");
+  } else {
+    freopen(log_path, "a", stderr);
+  }
+
+  signal(SIGINT,shutdown_server);
+  signal(SIGTERM,shutdown_server);
+
+  ONION_VERSION_IS_COMPATIBLE_OR_ABORT();
+  
+  initialize_queue();
+  o=onion_new(O_THREADED);
+  onion_set_timeout(o, 300 * 1000);
+  // We set this to a large number, hoping the client closes the connection itself
+  // If the server times out before client does, GnuTLS complains "The TLS connection was non-properly terminated."
+  onion_set_certificate(o, O_SSL_CERTIFICATE_KEY, ssl_crt_path, ssl_key_path);
+  onion_set_hostname(o, json_object_get_string(root_app_interface));
+  onion_set_port(o, json_object_get_string(root_app_port));
+  onion_url *urls=onion_root_url(o);
+  onion_url_add(urls, "", index_page);
+  onion_url_add(urls, "health_check/", health_check);
+  
+  ONION_INFO(
+    "Public address client listening on %s:%s",
+    json_object_get_string(root_app_interface), json_object_get_string(root_app_port)
+  );
+  onion_listen(o);
+  onion_free(o);
+  finalize_queue();
+  json_object_put(root);
+  pthread_mutex_destroy(&lock);
+  freopen("/dev/tty", "a", stderr); // may have side effects, but fit our purpose for the time being.
+  return 0;
 }
