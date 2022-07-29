@@ -101,6 +101,7 @@ int play_sound(const char* sound_path) {
 }
 
 void* handle_sound_name_queue() {
+    char* sound_realpath = NULL;
     while (1) {
         char* queue_str = list_queue_items();
         printf("%s", queue_str);
@@ -111,48 +112,37 @@ void* handle_sound_name_queue() {
           onion_log_stderr(O_INFO, "utils.c", 80, "sound_name_queue cleared, thread quited");
           break;
         }
-
-        char* sound_name = peek();
-        if (sound_name == NULL) {
-          onion_log_stderr(
-              O_ERROR, "utils.c", 80,
-              "Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed", sound_name
-          );
-          pthread_mutex_lock(&lock);
-          dequeue();
-          continue;
-        }
-        if (strnlen(sound_name, NAME_MAX) >= NAME_MAX) {
-          onion_log_stderr(
-              O_ERROR, "utils.c", 90,
-              "sound_name [%s] too long. The 1st item  will be directly dequeue()'ed", sound_name
-          );
-          pthread_mutex_lock(&lock);
-          dequeue();
-          continue;
-        }
-
-        char sound_path[PATH_MAX] = "", sound_realpath[PATH_MAX];
-        strcat(sound_path, sound_repository_path);
-        strcat(sound_path, sound_name);
-        free(sound_name);
-        realpath(sound_path, sound_realpath);
+        free(sound_realpath);
+        sound_realpath = peek();
         if (sound_realpath == NULL) {
-          onion_log_stderr(O_ERROR, "utils.c", 100, "sound_realpath == NULL. It will be directly dequeue()'ed");
+          ONION_ERROR("Failed to peek() a non-empty queue. The 1st item will be directly dequeue()'ed", sound_realpath);
+          pthread_mutex_lock(&lock);
+          dequeue();
+          continue;
         }
-        FILE *fptr;
-        if ((fptr = fopen(sound_realpath, "r"))) {
-          fclose(fptr);
-          onion_log_stderr(
-            O_INFO, "utils.c", 110, "Currently playing: [%s], current sound_queue_size: %d", sound_realpath, qs
-          );
-          play_sound(sound_realpath);
-        } else {
-          onion_log_stderr(
-            O_ERROR, "utils.c", 110, "sound_realpath is not NULL but the file does not exist. dequeue()'ed"
-          );
-        }        
+        if (strnlen(sound_realpath, PATH_MAX) >= PATH_MAX) {
+          ONION_ERROR("sound_realpath [%s] too long. It will be directly dequeue()'ed", sound_realpath);
+          pthread_mutex_lock(&lock);
+          dequeue();
+          continue;
+        }       
+
+        ONION_INFO("Currently playing: [%s], current sound_queue_size: %d", sound_realpath, qs);
+        // We dont check file accessibility here, this is checked on index_page()
+        // mpg123/ao will return if the file does not exist without breaking the program
+        play_sound(sound_realpath);
+
         pthread_mutex_lock(&lock);
         dequeue();
     }
+}
+
+bool is_file_accessible(const char* file_path) {
+  FILE *fptr;
+  if ((fptr = fopen(file_path, "r"))) {
+    fclose(fptr);
+    return true;
+  } else {
+    return false;
+  }        
 }

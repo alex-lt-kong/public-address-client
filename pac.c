@@ -27,53 +27,52 @@ int index_page(void *p, onion_request *req, onion_response *res) {
   char err_msg[PATH_MAX];
   char info_msg[PATH_MAX];
   if (authenticate(req, res) == false) {
-    snprintf(err_msg, PATH_MAX, "Failed login attempt");
-    ONION_WARNING(err_msg);
+    ONION_WARNING("Failed login attempt");
     return OCS_PROCESSED;
   }
 
-  const char* notification_type = onion_request_get_query(req, "notification_type");
   const char* sound_name = onion_request_get_query(req, "sound_name");
-  if (notification_type == NULL) {
-    return onion_shortcut_response("Parameter notification_type is missing", HTTP_BAD_REQUEST, req, res);
+  if (sound_name == NULL || strnlen(sound_name, NAME_MAX) >= NAME_MAX) {
+    snprintf(err_msg, PATH_MAX, "sound_name invalid (NULL or too long)");
+    ONION_WARNING(err_msg);
+    return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
   }
-  if (strcmp(notification_type, "custom") == 0 || strcmp(notification_type, "chiming") == 0) {
-    char custom_sound_name[NAME_MAX + 32] = "";
-    if (strcmp(notification_type, "chiming") == 0) {
-      strcat(custom_sound_name, "cuckoo-clock-sound-0727.mp3");
-    } else {
-      if (sound_name == NULL || strnlen(sound_name, NAME_MAX) > NAME_MAX) {
-        snprintf(err_msg, PATH_MAX, "sound_name invalid (NULL or too long)");
-        ONION_WARNING(err_msg);
-        return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
-      }
-      strcat(custom_sound_name, "custom-event/");
-      strcat(custom_sound_name, sound_name);
-    }
-    pthread_mutex_lock(&lock);
-    int qs = get_queue_size();
-    if (enqueue(custom_sound_name)) {
-      pthread_mutex_unlock(&lock);
-      if (qs == 0) { // i.e., before enqueue() the queue is empty, so we start a new handle_sound_name_queue thread.
-        pthread_t my_thread;
-        pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL); // no parentheses here 
-      }
-      snprintf(
-        info_msg, PATH_MAX, "[%s] added to sound_queue, notification_type == [%s], sound_queue_size: %d",
-        custom_sound_name, notification_type, qs+1
-      );      
-      ONION_INFO(info_msg);
-      return onion_shortcut_response(info_msg, HTTP_OK, req, res);
-    } else {
-      pthread_mutex_unlock(&lock);
-      snprintf(err_msg, PATH_MAX, "queue is full/server has not enough free memory, new sound discarded.");
-      ONION_WARNING(err_msg);
-      return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
-    }
+  if (strstr(sound_name,"/..") != NULL || strstr(sound_name,"../") != NULL) {
+    snprintf(
+      err_msg, PATH_MAX, "sound_name [%s] may try to escape from sound_repository_path",
+      sound_name, sound_repository_path
+    );
+    ONION_WARNING(err_msg);
+		return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
+	}
+
+  char sound_path[PATH_MAX] = "", sound_realpath[PATH_MAX];
+  strcat(sound_path, sound_repository_path);
+  strcat(sound_path, sound_name);
+  realpath(sound_path, sound_realpath);
+  if (is_file_accessible(sound_realpath) == false) {
+    snprintf(err_msg, PATH_MAX, "sound_name [%s] is inaccessible", sound_name);
+    ONION_WARNING(err_msg);
+		return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
   }
-  snprintf(err_msg, PATH_MAX, "<meta charset=\"utf-8\">notification_type's value [%s] is invalid",notification_type);
-  ONION_WARNING(err_msg);
-  return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
+
+  pthread_mutex_lock(&lock);
+  int qs = get_queue_size();
+  if (enqueue(sound_realpath)) {
+    pthread_mutex_unlock(&lock);
+    if (qs == 0) { // i.e., before enqueue() the queue is empty, so we start a new handle_sound_name_queue thread.
+      pthread_t my_thread;
+      pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL); // no parentheses here 
+    }
+    snprintf(info_msg, PATH_MAX, "[%s] added to sound_queue, sound_queue_size: %d", sound_name, qs+1);      
+    ONION_INFO(info_msg);
+    return onion_shortcut_response(info_msg, HTTP_OK, req, res);
+  } else {
+    pthread_mutex_unlock(&lock);
+    snprintf(err_msg, PATH_MAX, "queue is full/server has not enough free memory, new sound discarded.");
+    ONION_WARNING(err_msg);
+    return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
+  }
 }
 
 
@@ -112,9 +111,7 @@ int main(int argc, char **argv){
     const char* ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
     const char* ssl_key_path = json_object_get_string(root_app_ssl_key_path);
     if (sound_repository_path == NULL || strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
-      onion_log_stderr(
-        O_ERROR, "pac.c", 100, "sound_repository [%s] is either NULL or too long", sound_repository_path
-      );
+      ONION_ERROR("sound_repository [%s] is either NULL or too long", sound_repository_path);
       return 2;
     }
     if (pac_username == NULL || pac_passwd == NULL || ssl_crt_path == NULL || ssl_key_path == NULL) {
@@ -125,11 +122,8 @@ int main(int argc, char **argv){
     if (dir) { // exist
       closedir(dir);
     } else {
-      onion_log_stderr(
-        O_ERROR, "pac.c", 100,
-        "sound_repository [%s] either doesn't exist or is inaccessible.", sound_repository_path
-      );
-      return 3;
+      ONION_ERROR("sound_repository [%s] is inaccessible.", sound_repository_path);
+      return 4;
     }
 
     signal(SIGINT,shutdown_server);
@@ -149,9 +143,9 @@ int main(int argc, char **argv){
     onion_url_add(urls, "", index_page);
     onion_url_add(urls, "health_check/", health_check);
     
-    onion_log_stderr(
-        O_INFO, "pac.c", 205, "Public address client listening on %s:%s",
-        json_object_get_string(root_app_interface), json_object_get_string(root_app_port)
+    ONION_INFO(
+      "Public address client listening on %s:%s",
+      json_object_get_string(root_app_interface), json_object_get_string(root_app_port)
     );
     onion_listen(o);
     onion_free(o);
