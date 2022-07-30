@@ -1,4 +1,5 @@
-# 
+# Benchmarking
+* How does the newer C implementation compare to the previous Python one?
 
 * `curl-format.txt`:
 ```
@@ -10,7 +11,6 @@
   time_starttransfer:  %{time_starttransfer}s\n 
                      ----------\n 
           time_total:  %{time_total}s\n
-
 ```
 
 * Typical Python(Flask) implementation's round-trip time as measured by cURL:
