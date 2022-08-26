@@ -65,7 +65,7 @@ int play_sound(const char* sound_path) {
     size_t done;
     int err;
 
-    int driver;
+    int driver_id;
     ao_device *dev;
 
     ao_sample_format format;
@@ -74,12 +74,14 @@ int play_sound(const char* sound_path) {
 
     /* initializations */
     ao_initialize();
-    if (driver = ao_default_driver_id() < 0) {
+    driver_id = ao_default_driver_id();
+    if (driver_id < 0) {
       ONION_ERROR("ao_default_driver_id() failed to find a available driver");
       ao_shutdown();
-      return driver;
+      return driver_id;
     }
-    if (ret_val = mpg123_init() != MPG123_OK) {
+    ret_val = mpg123_init();
+    if (ret_val != MPG123_OK) {
       ONION_ERROR("mpg123_init() failed, returned: %d", ret_val);
       mpg123_exit();
       ao_shutdown();
@@ -95,40 +97,33 @@ int play_sound(const char* sound_path) {
 
     buffer_size = mpg123_outblock(mh);
     buffer = (unsigned char*) malloc(buffer_size * sizeof(unsigned char));
-    int fd = open(sound_path, O_RDONLY);
-    // directly using mpg123_open() sometimes causes error, use system's open() instead.
-    if (fd < 0) {
-      ONION_ERROR("Failed to open() [%s], reason: %s",sound_path, strerror(errno));
-      mpg123_exit();
-      ao_shutdown();
-      return errno;
-    }
+
     /* open the file and get the decoding format */
-    if (ret_val = mpg123_open_fd(mh, fd) != MPG123_OK) {
-      ONION_ERROR("mpg123_open_fd() failed, err: %d", ret_val);
+    ret_val = mpg123_open(mh, sound_path);
+    if (ret_val != MPG123_OK) {
+      ONION_ERROR("mpg123_open() failed, err: %d", ret_val);
       mpg123_delete(mh);
       mpg123_exit();
-      close(fd);
       ao_shutdown();
       return ret_val;
     }
-    if (ret_val = mpg123_getformat(mh, &rate, &channels, &encoding)) {
+    ret_val = mpg123_getformat(mh, &rate, &channels, &encoding);
+    if (ret_val != MPG123_OK) {
       ONION_ERROR("mpg123_getformat() failed, err: %d", ret_val);
       mpg123_close(mh);
       mpg123_delete(mh);
       mpg123_exit();
-      close(fd);
       ao_shutdown();
       return ret_val;
     }
 
     /* set the output format and open the output device */
-    if (format.bits = mpg123_encsize(encoding) * 8 == 0) {
+    format.bits = mpg123_encsize(encoding) * 8;
+    if (format.bits == 0) {
       ONION_ERROR("mpg123_encsize() returns 0, means format could be unsupported");
       mpg123_close(mh);
       mpg123_delete(mh);
       mpg123_exit();
-      close(fd);
       ao_shutdown();
       return -1;
     }
@@ -136,13 +131,14 @@ int play_sound(const char* sound_path) {
     format.channels = channels;
     format.byte_format = AO_FMT_NATIVE;
     format.matrix = 0;
-    dev = ao_open_live(driver, &format, NULL);
+    dev = ao_open_live(driver_id, &format, NULL);
+    // This function call is a common point of failure, doc here:
+    // https://xiph.org/ao/doc/ao_open_live.html
     if (dev == NULL) {
       ONION_ERROR("ao_open_live() returns NULL. Errno: %d, reason: %s", errno, strerror(errno));
       mpg123_close(mh);
       mpg123_delete(mh);
       mpg123_exit();
-      close(fd);
       ao_shutdown();
       return errno;
     }
@@ -156,7 +152,6 @@ int play_sound(const char* sound_path) {
     mpg123_close(mh);
     mpg123_delete(mh);
     mpg123_exit();
-    close(fd);
     ao_shutdown();
     return 0;
 }
