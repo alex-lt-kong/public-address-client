@@ -53,8 +53,12 @@ bool authenticate(onion_request *req, onion_response *res) {
 }
 
 int play_sound(const char* sound_path) {
+    int ret_val = -1;
     // This function an its variants seems everywhere on the Internet, my version
     // comes from: https://hzqtc.github.io/2012/05/play-mp3-with-libmpg123-and-libao.html
+    // my understanding is that mpg123 is responsible for decoding and libao is 
+    // respobsible for making sounds from decoded raw music bytes.
+    // mpg123 official doc: https://www.mpg123.de/api/
     mpg123_handle *mh;
     unsigned char *buffer;
     size_t buffer_size;
@@ -70,24 +74,78 @@ int play_sound(const char* sound_path) {
 
     /* initializations */
     ao_initialize();
-    driver = ao_default_driver_id();
-    mpg123_init();
+    if (driver = ao_default_driver_id() < 0) {
+      ONION_ERROR("ao_default_driver_id() failed to find a available driver");
+      ao_shutdown();
+      return driver;
+    }
+    if (ret_val = mpg123_init() != MPG123_OK) {
+      ONION_ERROR("mpg123_init() failed, returned: %d", ret_val);
+      mpg123_exit();
+      ao_shutdown();
+      return ret_val;
+    }
     mh = mpg123_new(NULL, &err);
+    if (mh == NULL) {
+      ONION_ERROR("failed to create an mpg123_handle by calling mpg123_new(). Error code: %s", err);
+      mpg123_exit();
+      ao_shutdown();
+      return err;
+    }
+
     buffer_size = mpg123_outblock(mh);
     buffer = (unsigned char*) malloc(buffer_size * sizeof(unsigned char));
-
+    int fd = open(sound_path, O_RDONLY);
+    // directly using mpg123_open() sometimes causes error, use system's open() instead.
+    if (fd < 0) {
+      ONION_ERROR("Failed to open() [%s], reason: %s",sound_path, strerror(errno));
+      mpg123_exit();
+      ao_shutdown();
+      return errno;
+    }
     /* open the file and get the decoding format */
-    mpg123_open(mh, sound_path);
-    mpg123_getformat(mh, &rate, &channels, &encoding);
+    if (ret_val = mpg123_open_fd(mh, fd) != MPG123_OK) {
+      ONION_ERROR("mpg123_open_fd() failed, err: %d", ret_val);
+      mpg123_delete(mh);
+      mpg123_exit();
+      close(fd);
+      ao_shutdown();
+      return ret_val;
+    }
+    if (ret_val = mpg123_getformat(mh, &rate, &channels, &encoding)) {
+      ONION_ERROR("mpg123_getformat() failed, err: %d", ret_val);
+      mpg123_close(mh);
+      mpg123_delete(mh);
+      mpg123_exit();
+      close(fd);
+      ao_shutdown();
+      return ret_val;
+    }
 
     /* set the output format and open the output device */
-    format.bits = mpg123_encsize(encoding) * 8; // bytes * 8 to bits
+    if (format.bits = mpg123_encsize(encoding) * 8 == 0) {
+      ONION_ERROR("mpg123_encsize() returns 0, means format could be unsupported");
+      mpg123_close(mh);
+      mpg123_delete(mh);
+      mpg123_exit();
+      close(fd);
+      ao_shutdown();
+      return -1;
+    }
     format.rate = rate;
     format.channels = channels;
     format.byte_format = AO_FMT_NATIVE;
     format.matrix = 0;
     dev = ao_open_live(driver, &format, NULL);
-
+    if (dev == NULL) {
+      ONION_ERROR("ao_open_live() returns NULL. Errno: %d, reason: %s", errno, strerror(errno));
+      mpg123_close(mh);
+      mpg123_delete(mh);
+      mpg123_exit();
+      close(fd);
+      ao_shutdown();
+      return errno;
+    }
     /* decode and play */
     while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK)
         ao_play(dev, buffer, done);
@@ -98,8 +156,8 @@ int play_sound(const char* sound_path) {
     mpg123_close(mh);
     mpg123_delete(mh);
     mpg123_exit();
+    close(fd);
     ao_shutdown();
-
     return 0;
 }
 
@@ -133,7 +191,11 @@ void* handle_sound_name_queue() {
     ONION_INFO("Currently playing: [%s], current sound_queue_size: %d", sound_realpath, qs);
     // We dont check file accessibility here, this is checked on index_page()
     // mpg123/ao will return if the file does not exist without breaking the program
-    play_sound(sound_realpath);
+    if (play_sound(sound_realpath) != 0) {
+      ONION_INFO("Failed to play: [%s]", sound_realpath);
+    } else {
+      ONION_INFO("[%s] played successfully", sound_realpath); // use to debug potential deadlock
+    }
 
     pthread_mutex_lock(&lock);
     dequeue();

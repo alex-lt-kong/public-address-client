@@ -5,6 +5,9 @@
 #include <onion/codecs.h>
 #include <onion/onion.h>
 #include <pthread.h>
+#include <fcntl.h>  // open()
+#include <unistd.h> // close()
+#include <errno.h>
 /* play MP3 files */
 #include <ao/ao.h>
 #include <mpg123.h>
