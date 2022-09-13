@@ -9,6 +9,9 @@
     "log.h": "c",
     "utils.h": "c",
     "libgen.h": "c",
-    "queue.h": "c"
+    "queue.h": "c",
+    "*.tcc": "c",
+    "fstream": "c",
+    "ostream": "c"
   }
 }

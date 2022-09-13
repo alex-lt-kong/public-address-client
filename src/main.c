@@ -62,7 +62,9 @@ int index_page(void *p, onion_request *req, onion_response *res) {
     pthread_mutex_unlock(&lock);
     if (qs == 0) { // i.e., before enqueue() the queue is empty, so we start a new handle_sound_name_queue thread.
       pthread_t my_thread;
-      pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL); // no parentheses here 
+      if (pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL) != 0) {
+        ONION_ERROR("Failed to pthread_create() handle_sound_name_queue");
+      }
     }
     snprintf(info_msg, PATH_MAX, "[%s] added to sound_queue, sound_queue_size: %d", sound_name, qs+1);      
     ONION_INFO(info_msg);
