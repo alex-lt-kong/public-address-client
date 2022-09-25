@@ -38,10 +38,7 @@ int index_page(void *p, onion_request *req, onion_response *res) {
     return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
   }
   if (strstr(sound_name,"/..") != NULL || strstr(sound_name,"../") != NULL) {
-    snprintf(
-      err_msg, PATH_MAX, "sound_name [%s] may try to escape from sound_repository_path",
-      sound_name, sound_repository_path
-    );
+    snprintf(err_msg, PATH_MAX, "sound_name [%s] may try to escape from sound_repository_path", sound_name);
     ONION_WARNING(err_msg);
 		return onion_shortcut_response(err_msg, HTTP_BAD_REQUEST, req, res);
 	}
@@ -63,7 +60,9 @@ int index_page(void *p, onion_request *req, onion_response *res) {
     if (qs == 0) { // i.e., before enqueue() the queue is empty, so we start a new handle_sound_name_queue thread.
       pthread_t my_thread;
       if (pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL) != 0) {
-        ONION_ERROR("Failed to pthread_create() handle_sound_name_queue");
+        ONION_ERROR("Failed to pthread_create() handle_sound_name_queue, reason: %s", strerror(errno));
+      } else {
+        ONION_INFO("handle_sound_name_queue pthread_create()'ed, thread_id: %lu", my_thread);
       }
     }
     snprintf(info_msg, PATH_MAX, "[%s] added to sound_queue, sound_queue_size: %d", sound_name, qs+1);      
