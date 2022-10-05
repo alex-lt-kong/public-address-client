@@ -158,7 +158,6 @@ int play_sound(const char* sound_path) {
 
 void* handle_sound_name_queue() {
   char* sound_realpath = NULL;
-  ONION_INFO("handle_sound_name_queue() started");
   while (1) {
     size_t qs = get_queue_size();
     pthread_mutex_unlock(&lock);

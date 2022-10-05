@@ -62,7 +62,17 @@ int index_page(void *p, onion_request *req, onion_response *res) {
       if (pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL) != 0) {
         ONION_ERROR("Failed to pthread_create() handle_sound_name_queue, reason: %s", strerror(errno));
       } else {
-        ONION_INFO("handle_sound_name_queue pthread_create()'ed, thread_id: %lu", my_thread);
+        if (pthread_detach(my_thread) == 0) {
+          // We need to detach the thread so when handle_sound_name_queue() returns, the thread resources will be
+          // fully released; otherwise, it is suspected that some thread resources will NOT be released and we will
+          // be unable to pthread_create() new thread a while later, resulting in "Cannot allocate memory" error.
+          ONION_INFO("handle_sound_name_queue pthread_create()'ed");
+        } else {
+          ONION_ERROR(
+            "handle_sound_name_queue pthread_create()'ed, but failed to pthread_detach() it, reason: %s",
+            my_thread, strerror(errno)
+          );
+        }
       }
     }
     snprintf(info_msg, PATH_MAX, "[%s] added to sound_queue, sound_queue_size: %d", sound_name, qs+1);      
