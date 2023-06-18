@@ -24,13 +24,22 @@
 const char *http_auth_username;
 const char *http_auth_password;
 
+volatile sig_atomic_t e_flag = 0;
+
+static void signal_handler(int signum) {
+  char msg[] = "Signal [  ] caught\n";
+  msg[8] = '0' + (char)(signum / 10);
+  msg[9] = '0' + (char)(signum % 10);
+  write(STDIN_FILENO, msg, strlen(msg));
+  e_flag = 1;
+}
 static int request_handler(void *cls, struct MHD_Connection *connection,
                            const char *url, const char *method,
                            const char *version, const char *upload_data,
                            size_t *upload_data_size, void **ptr) {
   static int aptr;
   const char *me = cls;
-  struct MHD_Response *response;
+  struct MHD_Response *response = NULL;
   int ret;
   char *user;
   char *pass;
@@ -121,14 +130,14 @@ static int request_handler(void *cls, struct MHD_Connection *connection,
               0) {
             fprintf(stderr,
                     "Failed to pthread_create() handle_sound_name_queue, "
-                    "reason: %s",
-                    strerror(errno));
+                    "reason: %d(%s)",
+                    errno, strerror(errno));
           } else {
             if (pthread_detach(my_thread) != 0)
               fprintf(stderr,
                       "handle_sound_name_queue pthread_create()'ed, but failed "
-                      "to pthread_detach() it, reason: %s",
-                      my_thread, strerror(errno));
+                      "to pthread_detach() it, reason: %d(%s)",
+                      errno, strerror(errno));
           }
         }
 
@@ -337,7 +346,15 @@ int main(int argc, char **argv) {
     retval = -1;
     goto err_init_mhd;
   }
-  getchar();
+
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = &signal_handler;
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGTERM, &sa, NULL);
+  while (e_flag == 0) {
+    MHD_run(d);
+  }
 
   MHD_stop_daemon(d);
 err_init_mhd:
