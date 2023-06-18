@@ -8,7 +8,8 @@
     "*.tcc": "c",
     "fstream": "c",
     "ostream": "c",
-    "ao.h": "c"
+    "ao.h": "c",
+    "mpg123.h": "c"
   },
   "editor.formatOnSave": true
 }

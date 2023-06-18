@@ -8,8 +8,16 @@ int initialize_queue() {
   sound_queue = malloc(MAX_SOUND_QUEUE_SIZE * sizeof(char *));
   front_ptr = malloc(sizeof(int));
   rear_ptr = malloc(sizeof(int));
+  if (sound_queue == NULL || front_ptr == NULL || rear_ptr == NULL) {
+    fprintf(stderr, "malloc() failed\n");
+    free(sound_queue);
+    free(rear_ptr);
+    free(front_ptr);
+    return -1;
+  }
   *front_ptr = 0;
   *rear_ptr = 0;
+  return 0;
 }
 
 int get_queue_size() {

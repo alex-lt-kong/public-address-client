@@ -1,13 +1,15 @@
+CC = clang
 SRC_DIR = ./src
+OPTS = -O2 -Wall -pedantic -Wextra -Wc++-compat
 
 main: $(SRC_DIR)/main.c $(SRC_DIR)/queue.o $(SRC_DIR)/utils.o
-	gcc $(SRC_DIR)/main.c $(SRC_DIR)/queue.o $(SRC_DIR)/utils.o -O3 -o ./pac.out -lonion -lpthread -lmpg123 -lao -ljson-c -Wall
+	$(CC) $(SRC_DIR)/main.c $(SRC_DIR)/queue.o $(SRC_DIR)/utils.o -o ./pac.out -lmicrohttpd -lpthread -lmpg123 -lao -ljson-c $(OPTS)
 
 queue.o: $(SRC_DIR)/queue.c $(SRC_DIR)/queue.h
-	gcc $(SRC_DIR)/queue.c -c -O3 -Wall
+	$(CC) $(SRC_DIR)/queue.c -c $(OPTS)
 
 utils.o: $(SRC_DIR)/utils.c $(SRC_DIR)/utils.h
-	gcc $(SRC_DIR)/utils.c -c -O3 -Wall
+	$(CC) $(SRC_DIR)/utils.c -c $(OPTS)
 
 clean:
-	rm *.out $(SRC_DIR)/*.o
+	rm *.out *.o $(SRC_DIR)/*.o
