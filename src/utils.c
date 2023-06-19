@@ -1,4 +1,7 @@
+#include <linux/limits.h>
 #include <pthread.h>
+#include <syslog.h>
+
 /* play MP3 files */
 #include <ao/ao.h>
 #include <mpg123.h>
@@ -36,23 +39,23 @@ int play_sound(const char *sound_path) {
   ao_initialize();
   driver_id = ao_default_driver_id();
   if (driver_id < 0) {
-    fprintf(stderr, "ao_default_driver_id() failed to find a available driver");
+    syslog(LOG_ERR, "ao_default_driver_id() failed to find a available driver");
     ao_shutdown();
     return driver_id;
   }
   ret_val = mpg123_init();
   if (ret_val != MPG123_OK) {
-    fprintf(stderr, "mpg123_init() failed, returned: %d", ret_val);
+    syslog(LOG_ERR, "mpg123_init() failed, returned: %d", ret_val);
     mpg123_exit();
     ao_shutdown();
     return ret_val;
   }
   mh = mpg123_new(NULL, &err);
   if (mh == NULL) {
-    fprintf(stderr,
-            "failed to create an mpg123_handle by calling mpg123_new(). "
-            "Error code: %s",
-            err);
+    syslog(LOG_ERR,
+           "failed to create an mpg123_handle by calling mpg123_new(). "
+           "Error code: %s",
+           err);
     mpg123_exit();
     ao_shutdown();
     return err;
@@ -64,7 +67,7 @@ int play_sound(const char *sound_path) {
   /* open the file and get the decoding format */
   ret_val = mpg123_open(mh, sound_path);
   if (ret_val != MPG123_OK) {
-    fprintf(stderr, "mpg123_open() failed, err: %d", ret_val);
+    syslog(LOG_ERR, "mpg123_open() failed, err: %d", ret_val);
     mpg123_delete(mh);
     mpg123_exit();
     ao_shutdown();
@@ -72,7 +75,7 @@ int play_sound(const char *sound_path) {
   }
   ret_val = mpg123_getformat(mh, &rate, &channels, &encoding);
   if (ret_val != MPG123_OK) {
-    fprintf(stderr, "mpg123_getformat() failed, err: %d", ret_val);
+    syslog(LOG_ERR, "mpg123_getformat() failed, err: %d", ret_val);
     mpg123_close(mh);
     mpg123_delete(mh);
     mpg123_exit();
@@ -83,8 +86,8 @@ int play_sound(const char *sound_path) {
   /* set the output format and open the output device */
   format.bits = mpg123_encsize(encoding) * 8;
   if (format.bits == 0) {
-    fprintf(stderr,
-            "mpg123_encsize() returns 0, means format could be unsupported");
+    syslog(LOG_ERR,
+           "mpg123_encsize() returns 0, means format could be unsupported");
     mpg123_close(mh);
     mpg123_delete(mh);
     mpg123_exit();
@@ -99,8 +102,8 @@ int play_sound(const char *sound_path) {
   // This function call is a common point of failure, doc here:
   // https://xiph.org/ao/doc/ao_open_live.html
   if (dev == NULL) {
-    fprintf(stderr, "ao_open_live() returns NULL. Errno: %d, reason: %s", errno,
-            strerror(errno));
+    syslog(LOG_ERR, "ao_open_live() returns NULL. Errno: %d, reason: %s", errno,
+           strerror(errno));
     mpg123_close(mh);
     mpg123_delete(mh);
     mpg123_exit();
@@ -127,39 +130,39 @@ void *handle_sound_name_queue() {
     size_t qs = get_queue_size();
     pthread_mutex_unlock(&lock);
     if (qs == 0) {
-      printf("sound_name_queue cleared, thread quited");
+      syslog(LOG_INFO, "sound_name_queue cleared, thread quited");
       break;
     }
     free(sound_realpath);
     sound_realpath = peek();
     if (sound_realpath == NULL) {
-      fprintf(stderr,
-              "Failed to peek() a non-empty queue. The 1st item will be "
-              "directly dequeue()'ed",
-              sound_realpath);
+      syslog(LOG_ERR,
+             "Failed to peek() a non-empty queue. The 1st item will be "
+             "directly dequeue()'ed",
+             sound_realpath);
       pthread_mutex_lock(&lock);
       dequeue();
       continue;
     }
     if (strnlen(sound_realpath, PATH_MAX) >= PATH_MAX) {
-      fprintf(stderr,
-              "sound_realpath [%s] too long. It will be directly dequeue()'ed",
-              sound_realpath);
+      syslog(LOG_ERR,
+             "sound_realpath [%s] too long. It will be directly dequeue()'ed",
+             sound_realpath);
       pthread_mutex_lock(&lock);
       dequeue();
       continue;
     }
 
-    printf("Currently playing: [%s], current sound_queue_size: %d",
+    syslog(LOG_INFO, "Currently playing: [%s], current sound_queue_size: %d",
            sound_realpath, qs);
     // We dont check file accessibility here, this is checked on index_page()
     // mpg123/ao will return if the file does not exist without breaking the
     // program
     if (play_sound(sound_realpath) != 0) {
-      printf("Failed to play: [%s]", sound_realpath);
+      syslog(LOG_ERR, "Failed to play: [%s]", sound_realpath);
     } else {
-      printf("[%s] played successfully",
-             sound_realpath); // use to debug potential deadlock
+      // use to debug potential deadlock
+      syslog(LOG_INFO, "[%s] played successfully", sound_realpath);
     }
 
     pthread_mutex_lock(&lock);

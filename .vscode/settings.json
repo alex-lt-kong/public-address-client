@@ -9,7 +9,8 @@
     "fstream": "c",
     "ostream": "c",
     "ao.h": "c",
-    "mpg123.h": "c"
+    "mpg123.h": "c",
+    "signal.h": "c"
   },
   "editor.formatOnSave": true
 }
