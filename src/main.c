@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h> /* for waitpid */
 #include <syslog.h>
 #include <unistd.h>
 
@@ -95,21 +94,9 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
   enum MHD_Result ret;
   struct MHD_Response *response = NULL;
   char msg[PATH_MAX];
-
   int r;
-  if ((r = pthread_mutex_lock(&lock)) != 0) {
-    snprintf(msg, PATH_MAX - 1, "pthread_mutex_lock() failed: %d", r);
-    syslog(LOG_WARNING, msg);
-    response = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
-                                               MHD_RESPMEM_MUST_COPY);
-    ret = MHD_queue_response(conn, MHD_HTTP_BAD_REQUEST, response);
-    MHD_destroy_response(response);
-    return ret;
-  }
-
   int qs = get_queue_size();
-  if (enqueue(sound_realpath)) {
-    pthread_mutex_unlock(&lock);
+  if (enqueue(sound_realpath) == 0) {
     if (qs == 0) { // i.e., before enqueue() the queue is empty, so we start
                    // a new handle_sound_name_queue thread.
       pthread_t my_thread;
@@ -144,7 +131,7 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
     MHD_destroy_response(response);
     return ret;
   }
-  pthread_mutex_unlock(&lock);
+
   snprintf(msg, PATH_MAX - 1,
            "queue is full/server has not enough free memory, "
            "new sound discarded.");
@@ -156,19 +143,18 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
   return ret;
 }
 
-static int request_handler(__attribute__((unused)) void *cls,
-                           struct MHD_Connection *conn, const char *url,
-                           const char *method,
-                           __attribute__((unused)) const char *version,
-                           __attribute__((unused)) const char *upload_data,
-                           __attribute__((unused)) size_t *upload_data_size,
-                           void **ptr) {
+enum MHD_Result
+request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
+                const char *url, const char *method,
+                __attribute__((unused)) const char *version,
+                __attribute__((unused)) const char *upload_data,
+                __attribute__((unused)) size_t *upload_data_size, void **ptr) {
   static int aptr;
   // const char *me = (const char *)cls;
   struct MHD_Response *response = NULL;
-  int ret;
+  enum MHD_Result ret;
   char *user;
-  char *pass;
+  char *pass = NULL;
   int fail;
   char msg[PATH_MAX];
 
@@ -181,10 +167,11 @@ static int request_handler(__attribute__((unused)) void *cls,
   }
   *ptr = NULL; /* reset when done */
 
-  pass = NULL;
   user = MHD_basic_auth_get_username_password(conn, &pass);
   fail = ((user == NULL) || (0 != strcmp(user, http_auth_username)) ||
           (0 != strcmp(pass, http_auth_password)));
+  MHD_free(user);
+  MHD_free(pass);
 
   if (fail) {
     response = MHD_create_response_from_buffer(strlen(RESP_ACCESS_DENIED),
@@ -285,7 +272,7 @@ struct MHD_Daemon *init_mhd(const char *interface, const int port,
   struct MHD_Daemon *daemon;
   // clang-format off
   daemon = MHD_start_daemon(
-                       MHD_USE_EPOLL | MHD_USE_DEBUG | MHD_USE_TLS,
+                       MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_DEBUG | MHD_USE_TLS,
                        port, NULL,
                        NULL, &request_handler, "",
                        MHD_OPTION_CONNECTION_TIMEOUT, 256,
@@ -420,12 +407,6 @@ int main(__attribute__((unused)) int argc, char **argv) {
     }
     goto err_invalid_config;
   }
-  retval = pthread_mutex_init(&lock, NULL);
-  if (retval != 0) {
-    syslog(LOG_ERR, "pthread_mutex_init() failed: %d", retval);
-    retval = -1;
-    goto err_mutex_init;
-  }
 
   if (initialize_queue() < 0) {
     retval = -1;
@@ -445,8 +426,6 @@ int main(__attribute__((unused)) int argc, char **argv) {
 err_init_mhd:
   finalize_queue();
 err_init_queue:
-  pthread_mutex_destroy(&lock);
-err_mutex_init:
 err_invalid_config:
   json_object_put(json_root);
 err_invalid_json:

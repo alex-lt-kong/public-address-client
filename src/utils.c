@@ -12,7 +12,6 @@
 const char *sound_repository_path;
 const char *pac_username;
 const char *pac_passwd;
-pthread_mutex_t lock;
 
 int play_sound(const char *sound_path) {
   int ret_val = -1;
@@ -23,7 +22,7 @@ int play_sound(const char *sound_path) {
   // respobsible for making sounds from decoded raw music bytes.
   // mpg123 official doc: https://www.mpg123.de/api/
   mpg123_handle *mh;
-  unsigned char *buffer;
+  char *buffer;
   size_t buffer_size;
   size_t done;
   int err;
@@ -54,7 +53,7 @@ int play_sound(const char *sound_path) {
   if (mh == NULL) {
     syslog(LOG_ERR,
            "failed to create an mpg123_handle by calling mpg123_new(). "
-           "Error code: %s",
+           "Error code: %d",
            err);
     mpg123_exit();
     ao_shutdown();
@@ -62,7 +61,7 @@ int play_sound(const char *sound_path) {
   }
 
   buffer_size = mpg123_outblock(mh);
-  buffer = (unsigned char *)malloc(buffer_size * sizeof(unsigned char));
+  buffer = (char *)malloc(buffer_size * sizeof(unsigned char));
 
   /* open the file and get the decoding format */
   ret_val = mpg123_open(mh, sound_path);
@@ -128,19 +127,20 @@ void *handle_sound_name_queue() {
   char *sound_realpath = NULL;
   while (1) {
     size_t qs = get_queue_size();
-    pthread_mutex_unlock(&lock);
+
+    free(sound_realpath);
     if (qs == 0) {
-      syslog(LOG_INFO, "sound_name_queue cleared, thread quited");
+      syslog(
+          LOG_INFO,
+          "sound_name_queue cleared, handle_sound_name_queue() thread quited");
       break;
     }
-    free(sound_realpath);
     sound_realpath = peek();
     if (sound_realpath == NULL) {
       syslog(LOG_ERR,
              "Failed to peek() a non-empty queue. The 1st item will be "
-             "directly dequeue()'ed",
-             sound_realpath);
-      pthread_mutex_lock(&lock);
+             "directly dequeue()'ed");
+
       dequeue();
       continue;
     }
@@ -148,7 +148,6 @@ void *handle_sound_name_queue() {
       syslog(LOG_ERR,
              "sound_realpath [%s] too long. It will be directly dequeue()'ed",
              sound_realpath);
-      pthread_mutex_lock(&lock);
       dequeue();
       continue;
     }
@@ -165,7 +164,6 @@ void *handle_sound_name_queue() {
       syslog(LOG_INFO, "[%s] played successfully", sound_realpath);
     }
 
-    pthread_mutex_lock(&lock);
     dequeue();
   }
 }

@@ -12,7 +12,6 @@
 #include "queue.h"
 
 extern const char *sound_repository_path;
-extern pthread_mutex_t lock;
 
 int play_sound(const char *sound_path);
 

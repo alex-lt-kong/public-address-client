@@ -2,6 +2,7 @@
 #define QUEUE_H
 
 #include <limits.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,17 +10,12 @@
 
 #define MAX_SOUND_QUEUE_SIZE 2048
 
+// This function is not thread-safe and should only be called once
 int initialize_queue();
 
-int get_queue_size();
+size_t get_queue_size();
 
-/**
- * @brief Caller needs to free() the returned char pointer
- *
- */
-char *list_queue_items();
-
-bool enqueue(const char *sound_name);
+int enqueue(const char *sound_name);
 
 /**
  * Return a pointer to sound_name at front_ptr or NULL in case of empty queue or
