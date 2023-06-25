@@ -160,19 +160,23 @@ void *handle_sound_name_queue() {
       continue;
     }
 
-    syslog(LOG_INFO, "Currently playing: [%s], current sound_queue_size: %d",
+    syslog(LOG_INFO, "Currently playing: [%s], current sound_queue_size: %lu",
            sound_realpath, qs);
     // We dont check file accessibility here, this is checked on index_page()
     // mpg123/ao will return if the file does not exist without breaking the
     // program
-    if (play_sound(sound_realpath) != 0) {
-      syslog(LOG_ERR, "Failed to play: [%s]", sound_realpath);
+    int retval = play_sound(sound_realpath);
+    dequeue();
+    if (retval != 0) {
+      syslog(LOG_ERR,
+             "Failed to play: [%s], this sound will be removed from "
+             "sound_queue anyway, current queue_size: %ld",
+             sound_realpath, get_queue_size());
     } else {
       // use to debug potential deadlock
-      syslog(LOG_INFO, "[%s] played successfully", sound_realpath);
+      syslog(LOG_INFO, "[%s] played successfully, current queue_size: %ld",
+             sound_realpath, get_queue_size());
     }
-
-    dequeue();
   }
   return (void *)NULL;
 }

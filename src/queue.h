@@ -8,13 +8,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_SOUND_QUEUE_SIZE 2048
+#define MAX_SOUND_QUEUE_SIZE 8
 
 // This function is not thread-safe and should only be called once
 int initialize_queue();
 
-size_t get_queue_size();
+ssize_t get_queue_size();
 
+/**
+ * @returns 0 if a sound_name is successfully enqueued or a negative number on
+ * error
+ */
 int enqueue(const char *sound_name);
 
 /**
@@ -23,7 +27,7 @@ int enqueue(const char *sound_name);
  */
 char *peek();
 
-void dequeue();
+int dequeue();
 
 void finalize_queue();
 
