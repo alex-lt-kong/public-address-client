@@ -20,8 +20,6 @@
 #include "queue.h"
 #include "utils.h"
 
-#define RESP_ACCESS_DENIED "Access denied\n"
-
 #define SSL_FILE_BUFF_SIZE 8192
 const char *http_auth_username;
 const char *http_auth_password;
@@ -76,6 +74,7 @@ enum MHD_Result resp_sound_inaccessible(struct MHD_Connection *conn,
   MHD_destroy_response(response);
   return ret;
 }
+
 enum MHD_Result resp_404(struct MHD_Connection *conn) {
 
   char msg[PATH_MAX];
@@ -156,7 +155,6 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   char *user;
   char *pass = NULL;
   int fail;
-  char msg[PATH_MAX];
 
   if (0 != strcmp(method, MHD_HTTP_METHOD_GET))
     return MHD_NO; /* unexpected method */
@@ -174,17 +172,16 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   MHD_free(pass);
 
   if (fail) {
-    response = MHD_create_response_from_buffer(strlen(RESP_ACCESS_DENIED),
-                                               (void *)RESP_ACCESS_DENIED,
-                                               MHD_RESPMEM_PERSISTENT);
-    ret = MHD_queue_basic_auth_fail_response(conn, "Public Address Realm",
-                                             response);
+    const char msg[] = "Access denied";
+    response = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
+                                               MHD_RESPMEM_MUST_COPY);
+    ret = MHD_queue_basic_auth_fail_response(conn, "PA Client Realm", response);
     MHD_destroy_response(response);
     return ret;
   }
 
   if (strcmp(url, "/health_check/") == 0) {
-    snprintf(msg, PATH_MAX - 1, "Client is up and running");
+    const char msg[] = "Client is up and running";
     response = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
                                                MHD_RESPMEM_MUST_COPY);
     ret = MHD_queue_response(conn, MHD_HTTP_OK, response);
@@ -399,6 +396,7 @@ int main(__attribute__((unused)) int argc, char **argv) {
     retval = -1;
     goto err_install_sighandler;
   }
+
   if (load_values_from_json(argv[0], &json_root, &interface, &port,
                             (char **)(&ssl_crt), (char **)(&ssl_key)) < 0) {
     retval = -1;
@@ -418,8 +416,11 @@ int main(__attribute__((unused)) int argc, char **argv) {
     goto err_init_mhd;
   }
   syslog(LOG_INFO, "initialized");
+
+  // getc() won't work without an interactive shell.
+  // (void)getc(stdin);
   while (e_flag == 0) {
-    MHD_run(d);
+    sleep(1);
   }
   syslog(LOG_INFO, "exiting");
   MHD_stop_daemon(d);

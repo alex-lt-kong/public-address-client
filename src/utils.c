@@ -14,7 +14,7 @@ const char *pac_username;
 const char *pac_passwd;
 
 int play_sound(const char *sound_path) {
-  int ret_val = -1;
+  int ret_val = 0;
   // This function an its variants seems everywhere on the Internet, my version
   // comes from:
   // https://hzqtc.github.io/2012/05/play-mp3-with-libmpg123-and-libao.html my
@@ -35,63 +35,61 @@ int play_sound(const char *sound_path) {
   long rate;
 
   /* initializations */
-  ao_initialize();
+  (void)ao_initialize();
   driver_id = ao_default_driver_id();
   if (driver_id < 0) {
     syslog(LOG_ERR, "ao_default_driver_id() failed to find a available driver");
-    ao_shutdown();
-    return driver_id;
+    ret_val = driver_id;
+    goto err_ao_default_driver_id;
   }
+
   ret_val = mpg123_init();
   if (ret_val != MPG123_OK) {
     syslog(LOG_ERR, "mpg123_init() failed, returned: %d", ret_val);
-    mpg123_exit();
-    ao_shutdown();
-    return ret_val;
+    ret_val = -1;
+    goto err_mpg123_init;
   }
+
   mh = mpg123_new(NULL, &err);
   if (mh == NULL) {
     syslog(LOG_ERR,
            "failed to create an mpg123_handle by calling mpg123_new(). "
            "Error code: %d",
            err);
-    mpg123_exit();
-    ao_shutdown();
-    return err;
+    ret_val = -1;
+    goto err_mpg123_new;
   }
 
+  // mpg123's doc doesn't seems to mention that this function will fail.
   buffer_size = mpg123_outblock(mh);
   buffer = (char *)malloc(buffer_size * sizeof(unsigned char));
-
+  if (buffer == NULL) {
+    syslog(LOG_ERR, "malloc() buffer failed");
+    ret_val = -1;
+    goto err_buffer_malloc;
+  }
   /* open the file and get the decoding format */
   ret_val = mpg123_open(mh, sound_path);
   if (ret_val != MPG123_OK) {
     syslog(LOG_ERR, "mpg123_open() failed, err: %d", ret_val);
-    mpg123_delete(mh);
-    mpg123_exit();
-    ao_shutdown();
-    return ret_val;
+    ret_val = -1;
+    goto err_mpg123_open;
   }
+
   ret_val = mpg123_getformat(mh, &rate, &channels, &encoding);
   if (ret_val != MPG123_OK) {
     syslog(LOG_ERR, "mpg123_getformat() failed, err: %d", ret_val);
-    mpg123_close(mh);
-    mpg123_delete(mh);
-    mpg123_exit();
-    ao_shutdown();
-    return ret_val;
+    ret_val = -1;
+    goto err_mpg123_getformat;
   }
 
   /* set the output format and open the output device */
   format.bits = mpg123_encsize(encoding) * 8;
   if (format.bits == 0) {
     syslog(LOG_ERR,
-           "mpg123_encsize() returns 0, means format could be unsupported");
-    mpg123_close(mh);
-    mpg123_delete(mh);
-    mpg123_exit();
-    ao_shutdown();
-    return -1;
+           "mpg123_encsize() returns 0, meaning that format is not supported");
+    ret_val = -1;
+    goto err_mpg123_encsize;
   }
   format.rate = rate;
   format.channels = channels;
@@ -101,26 +99,36 @@ int play_sound(const char *sound_path) {
   // This function call is a common point of failure, doc here:
   // https://xiph.org/ao/doc/ao_open_live.html
   if (dev == NULL) {
-    syslog(LOG_ERR, "ao_open_live() returns NULL. Errno: %d, reason: %s", errno,
+    syslog(LOG_ERR, "ao_open_live() returns NULL: %d (%s)", errno,
            strerror(errno));
-    mpg123_close(mh);
-    mpg123_delete(mh);
-    mpg123_exit();
-    ao_shutdown();
-    return errno;
+    ret_val = -1;
+    goto err_ao_open_live;
   }
-  /* decode and play */
-  while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK)
-    ao_play(dev, buffer, done);
 
+  /* decode and play */
+  while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK) {
+    if (ao_play(dev, buffer, done) == 0) {
+      syslog(LOG_ERR, "ao_play() failed");
+      break;
+    }
+  }
+
+  ao_close(dev);
+err_ao_open_live:
+err_mpg123_encsize:
+err_mpg123_getformat:
+  mpg123_close(mh);
+err_mpg123_open:
   /* clean up */
   free(buffer);
-  ao_close(dev);
-  mpg123_close(mh);
+err_buffer_malloc:
   mpg123_delete(mh);
+err_mpg123_new:
+err_mpg123_init:
   mpg123_exit();
-  ao_shutdown();
-  return 0;
+err_ao_default_driver_id:
+  (void)ao_shutdown();
+  return ret_val;
 }
 
 void *handle_sound_name_queue() {
@@ -166,6 +174,7 @@ void *handle_sound_name_queue() {
 
     dequeue();
   }
+  return (void *)NULL;
 }
 
 bool is_file_accessible(const char *file_path) {

@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -O2 -Wall -pedantic -Wextra -Wc++-compat
 LDFLAGS = -lmicrohttpd -lpthread -lmpg123 -lao -ljson-c
 SRC_DIR = ./src
-SANITIZER = -fsanitize=address -g
+#SANITIZER = -fsanitize=address -g
 
 main: pac.out 
 
