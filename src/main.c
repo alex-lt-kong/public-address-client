@@ -225,44 +225,29 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   return resp_404(conn);
 }
 
-int load_ssl_key_and_crt(const char *crt_path, const char *key_path,
-                         char **out_ssl_crt, char **out_ssl_key) {
+int load_ssl_key_or_crt(const char *path, char **out_content) {
   FILE *fp;
-
-  fp = fopen(crt_path, "rb");
+  int retval = 0;
+  fp = fopen(path, "rb");
   if (fp == NULL) {
-    syslog(LOG_ERR, "Error: could not open file: '%s'\n", crt_path);
-    return -1;
+    syslog(LOG_ERR, "Failed to fopen() %s", path);
+    retval = -1;
+    goto err_fopen;
   }
 
-  size_t bytes_read = fread(out_ssl_crt, sizeof(char), SSL_FILE_BUFF_SIZE, fp);
+  size_t bytes_read = fread(out_content, sizeof(char), SSL_FILE_BUFF_SIZE, fp);
   if (bytes_read > 0) {
   } else if (feof(fp)) {
-    syslog(LOG_ERR, "Error: end-of-file reached while reading from file '%s'\n",
-           crt_path);
+    syslog(LOG_ERR, "feof() error while reading from [%s]", path);
   } else if (ferror(fp)) {
-    syslog(LOG_ERR, "Error: error reading from file '%s'\n", crt_path);
-    return -1;
+    syslog(LOG_ERR, "ferror() while` reading from [%s]", path);
+    retval = -1;
+    goto err_ferror;
   }
+err_ferror:
   fclose(fp);
-
-  fp = fopen(key_path, "rb");
-  if (fp == NULL) {
-    syslog(LOG_ERR, "Error: could not open file: '%s'\n", key_path);
-    return -1;
-  }
-  bytes_read = fread(out_ssl_key, sizeof(char), SSL_FILE_BUFF_SIZE, fp);
-  if (bytes_read > 0) {
-  } else if (feof(fp)) {
-    syslog(LOG_ERR, "Error: end-of-file reached while reading from file '%s'\n",
-           key_path);
-    return -1;
-  } else if (ferror(fp)) {
-    syslog(LOG_ERR, "Error: error reading from file '%s'\n", key_path);
-    return -1;
-  }
-  fclose(fp);
-  return 0;
+err_fopen:
+  return retval;
 }
 
 struct MHD_Daemon *init_mhd(const char *interface, const int port,
@@ -273,7 +258,7 @@ struct MHD_Daemon *init_mhd(const char *interface, const int port,
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(port);
   if (inet_pton(AF_INET, interface, &(server_addr.sin_addr)) < 0) {
-    syslog(LOG_ERR, "inet_pton() error: %d(%s)\n", errno, strerror(errno));
+    syslog(LOG_ERR, "inet_pton() error: %d(%s)", errno, strerror(errno));
     return NULL;
   }
 
@@ -290,10 +275,10 @@ struct MHD_Daemon *init_mhd(const char *interface, const int port,
                        MHD_OPTION_END);
   // clang-format on
   if (daemon == NULL) {
-    syslog(LOG_ERR, "MHD_start_daemon() failed.\n");
+    syslog(LOG_ERR, "MHD_start_daemon() failed");
     return NULL;
   }
-  syslog(LOG_INFO, "HTTP server listening on https://%s:%d\n", interface, port);
+  syslog(LOG_INFO, "HTTP server listening on https://%s:%d", interface, port);
   return daemon;
 }
 
@@ -320,7 +305,7 @@ int load_values_from_json(const char *argv0, json_object **json_root_out,
                           char **out_ssl_crt, char **out_ssl_key) {
   char bin_path[PATH_MAX], settings_path[PATH_MAX] = "";
   if (realpath(argv0, bin_path) == NULL) {
-    syslog(LOG_ERR, "realpath() failed: %d(%s)\n", errno, strerror(errno));
+    syslog(LOG_ERR, "realpath() failed: %d(%s)", errno, strerror(errno));
     return -1;
   }
   strcpy(settings_path, dirname(bin_path));
@@ -358,9 +343,12 @@ int load_values_from_json(const char *argv0, json_object **json_root_out,
     syslog(LOG_ERR, "Some required values are not provided");
     return -3;
   }
-  if (load_ssl_key_and_crt(ssl_crt_path, ssl_key_path, out_ssl_crt,
-                           out_ssl_key) < 0) {
-    syslog(LOG_ERR, "Failed to read either SSL certificate or key\n");
+  if (load_ssl_key_or_crt(ssl_crt_path, out_ssl_crt) < 0) {
+    syslog(LOG_ERR, "Failed to read SSL certificate file");
+    return -4;
+  }
+  if (load_ssl_key_or_crt(ssl_key_path, out_ssl_key) < 0) {
+    syslog(LOG_ERR, "Failed to read SSL key file");
     return -4;
   }
   *out_interface = json_object_get_string(root_app_interface);
@@ -372,7 +360,7 @@ int load_values_from_json(const char *argv0, json_object **json_root_out,
 int install_signal_handler() {
   // This design canNOT handle more than 99 signal types
   if (_NSIG > 99) {
-    syslog(LOG_ERR, "signal_handler() can't handle more than 99 signals\n");
+    syslog(LOG_ERR, "signal_handler() can't handle more than 99 signals");
     return -1;
   }
   struct sigaction act;

@@ -1,5 +1,6 @@
 #include <linux/limits.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <syslog.h>
 
 /* play MP3 files */
@@ -22,7 +23,7 @@ int play_sound(const char *sound_path) {
   // respobsible for making sounds from decoded raw music bytes.
   // mpg123 official doc: https://www.mpg123.de/api/
   mpg123_handle *mh;
-  char *buffer;
+  uint8_t *buffer;
   size_t buffer_size;
   size_t done;
   int err;
@@ -34,15 +35,18 @@ int play_sound(const char *sound_path) {
   int channels, encoding;
   long rate;
 
-  /* initializations */
   (void)ao_initialize();
   driver_id = ao_default_driver_id();
   if (driver_id < 0) {
-    syslog(LOG_ERR, "ao_default_driver_id() failed to find a available driver");
-    ret_val = driver_id;
+    syslog(LOG_ERR,
+           "ao_default_driver_id() failed to find an available driver");
+    ret_val = -1;
     goto err_ao_default_driver_id;
   }
 
+  // Useless no-op that used to do initialization work.
+  // Now this function really does nothing anymore. The only reason to call it
+  // is to be compatible with old versions of the library that still require it.
   ret_val = mpg123_init();
   if (ret_val != MPG123_OK) {
     syslog(LOG_ERR, "mpg123_init() failed, returned: %d", ret_val);
@@ -62,7 +66,7 @@ int play_sound(const char *sound_path) {
 
   // mpg123's doc doesn't seems to mention that this function will fail.
   buffer_size = mpg123_outblock(mh);
-  buffer = (char *)malloc(buffer_size * sizeof(unsigned char));
+  buffer = (uint8_t *)malloc(buffer_size * sizeof(uint8_t));
   if (buffer == NULL) {
     syslog(LOG_ERR, "malloc() buffer failed");
     ret_val = -1;
@@ -107,25 +111,30 @@ int play_sound(const char *sound_path) {
 
   /* decode and play */
   while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK) {
-    if (ao_play(dev, buffer, done) == 0) {
+    if (ao_play(dev, (char *)buffer, done) == 0) {
       syslog(LOG_ERR, "ao_play() failed");
       break;
     }
   }
 
-  ao_close(dev);
+  if (ao_close(dev) == 0) {
+    syslog(LOG_ERR, "ao_close() failed");
+  }
 err_ao_open_live:
 err_mpg123_encsize:
 err_mpg123_getformat:
-  mpg123_close(mh);
+  if (mpg123_close(mh) != MPG123_OK) {
+    syslog(LOG_ERR, "mpg123_close() failed");
+  }
 err_mpg123_open:
   /* clean up */
-  free(buffer);
+  (void)free(buffer);
 err_buffer_malloc:
-  mpg123_delete(mh);
+  // mpg123_delete accepts either a valid handle or NULL
+  (void)mpg123_delete(mh);
 err_mpg123_new:
 err_mpg123_init:
-  mpg123_exit();
+  (void)mpg123_exit();
 err_ao_default_driver_id:
   (void)ao_shutdown();
   return ret_val;

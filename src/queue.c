@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <linux/limits.h>
 #include <sys/syslog.h>
 #include <syslog.h>
@@ -16,7 +17,7 @@ int initialize_queue() {
   front_ptr = (int *)malloc(sizeof(int));
   rear_ptr = (int *)malloc(sizeof(int));
   if (sound_queue == NULL || front_ptr == NULL || rear_ptr == NULL) {
-    fprintf(stderr, "malloc() failed\n");
+    syslog(LOG_ERR, "malloc() failed: %d(%s)", errno, strerror(errno));
     free(sound_queue);
     free(rear_ptr);
     free(front_ptr);
