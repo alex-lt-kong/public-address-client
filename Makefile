@@ -3,7 +3,7 @@ CFLAGS = -O3 -Wall -pedantic -Wextra -Wc++-compat
 LDFLAGS = -lmicrohttpd -lpthread -lmpg123 -lao -ljson-c
 SRC_DIR = ./src
 #SANITIZER = -fsanitize=address -g
-VALGRIND = -ggdb3
+#VALGRIND = -ggdb3
 
 main: pac.out 
 

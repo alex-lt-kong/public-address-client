@@ -23,7 +23,7 @@ int play_sound(const char *sound_path) {
   // respobsible for making sounds from decoded raw music bytes.
   // mpg123 official doc: https://www.mpg123.de/api/
   mpg123_handle *mh;
-  uint8_t *buffer;
+  unsigned char *buffer;
   size_t buffer_size;
   size_t done;
   int err;
@@ -66,7 +66,7 @@ int play_sound(const char *sound_path) {
 
   // mpg123's doc doesn't seems to mention that this function will fail.
   buffer_size = mpg123_outblock(mh);
-  buffer = (uint8_t *)malloc(buffer_size * sizeof(uint8_t));
+  buffer = (unsigned char *)malloc(buffer_size * sizeof(unsigned char));
   if (buffer == NULL) {
     syslog(LOG_ERR, "malloc() buffer failed");
     ret_val = -1;

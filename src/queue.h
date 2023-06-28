@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_SOUND_QUEUE_SIZE 8
+#define MAX_SOUND_QUEUE_SIZE 32
 
 // This function is not thread-safe and should only be called once
 int initialize_queue();
