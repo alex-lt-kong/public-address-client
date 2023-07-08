@@ -122,7 +122,7 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
     }
 
     snprintf(msg, PATH_MAX - 1,
-             "[%s] added to sound_queue, sound_queue_size: %ld "
+             "[%s] added to sound_queue, sound_queue_size: %zd "
              "(MAX_SOUND_QUEUE_SIZE: %d)",
              sound_name, get_queue_size(), MAX_SOUND_QUEUE_SIZE);
     syslog(LOG_INFO, "%s", msg);
@@ -135,7 +135,7 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
   }
   if (qs == MAX_SOUND_QUEUE_SIZE) {
     snprintf(msg, PATH_MAX - 1,
-             "queue is full, new sound discarded. queue_size: %ld, "
+             "queue is full, new sound discarded. queue_size: %zd, "
              "MAX_SOUND_QUEUE_SIZE: %d",
              qs, MAX_SOUND_QUEUE_SIZE);
   } else {
@@ -200,11 +200,17 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   if (strcmp(url, "/") == 0) {
     // According to official querystring example:
     // https://github.com/pmq20/libmicrohttpd/blob/master/src/examples/querystring_example.c
-    // return value from MHD_lookup_connection_value() should not be free()ed
+    // return value from MHD_lookup_connection_value() should not be free()'ed
     const char *sound_name =
         MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "sound_name");
     if (sound_name == NULL) {
       return resp_sound_name_not_supplied(conn);
+    }
+    const char *delay_ms_char =
+        MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "delay_ms");
+    int delay_ms = 0;
+    if (delay_ms_char != NULL && strlen(delay_ms_char) < 8) {
+      delay_ms = abs(atoi(delay_ms_char));
     }
 
     if (strstr(sound_name, "/..") != NULL ||
@@ -219,6 +225,7 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
     if (is_file_accessible(sound_realpath) == false) {
       return resp_sound_inaccessible(conn, sound_name);
     }
+    usleep(delay_ms * 1000);
     return resp_add_sound_to_queue(conn, sound_name, sound_realpath);
   }
 
