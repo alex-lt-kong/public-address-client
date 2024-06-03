@@ -1,18 +1,23 @@
+#include "queue.h"
+
 #include <errno.h>
+#include <limits.h>
 #include <linux/limits.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/syslog.h>
 #include <syslog.h>
-
-#include "queue.h"
 
 char **sound_queue = NULL;
 int *front_ptr = NULL;
 int *rear_ptr = NULL;
 pthread_mutex_t lock;
 
-int initialize_queue() {
-  // To make get_queue_size()/enqueue()/dequeue() work correctly, we must
-  // use (MAX_SOUND_QUEUE_SIZE + 1) instead of MAX_SOUND_QUEUE_SIZE here.
+int pacq_initialize_queue() {
+  // To make pacq_get_queue_size()/pacq_enqueue()/dequeue() work correctly, we
+  // must use (MAX_SOUND_QUEUE_SIZE + 1) instead of MAX_SOUND_QUEUE_SIZE here.
   sound_queue = (char **)malloc((MAX_SOUND_QUEUE_SIZE + 1) * sizeof(char *));
   front_ptr = (int *)malloc(sizeof(int));
   rear_ptr = (int *)malloc(sizeof(int));
@@ -36,7 +41,7 @@ int initialize_queue() {
   return 0;
 }
 
-ssize_t get_queue_size() {
+ssize_t pacq_get_queue_size() {
   int r;
   ssize_t queue_sz = 0;
   if ((r = pthread_mutex_lock(&lock)) != 0) {
@@ -49,8 +54,8 @@ ssize_t get_queue_size() {
     syslog(LOG_ERR, "Unexpected internal sound_queue state: not initialized");
     queue_sz = -1;
   } else {
-    // To make get_queue_size()/enqueue()/dequeue() work correctly, we must
-    // use (MAX_SOUND_QUEUE_SIZE + 1) instead of MAX_SOUND_QUEUE_SIZE here.
+    // To make pacq_get_queue_size()/pacq_enqueue()/dequeue() work correctly, we
+    // must use (MAX_SOUND_QUEUE_SIZE + 1) instead of MAX_SOUND_QUEUE_SIZE here.
     queue_sz = ((MAX_SOUND_QUEUE_SIZE + 1) + *rear_ptr - *front_ptr) %
                (MAX_SOUND_QUEUE_SIZE + 1);
   }
@@ -74,25 +79,25 @@ char *list_queue_items() {
   queue_str_len += sprintf(queue_str + queue_str_len,
                            "===== sound_queue (front_ptr: %d, rear_ptr: %d, "
                            "size: %d, MAX_SOUND_QUEUE_SIZE: %d) =====\n",
-                           *front_ptr, *rear_ptr, get_queue_size(),
+                           *front_ptr, *rear_ptr, pacq_get_queue_size(),
                            MAX_SOUND_QUEUE_SIZE - 1);
-  for (int i = *front_ptr; i < *front_ptr + get_queue_size(); ++i) {
+  for (int i = *front_ptr; i < *front_ptr + pacq_get_queue_size(); ++i) {
     queue_str_len += sprintf(queue_str + queue_str_len, "%d: %s\n", i,
                              sound_queue[i % MAX_SOUND_QUEUE_SIZE]);
   }
   queue_str_len += sprintf(queue_str + queue_str_len,
                            "===== sound_queue (front_ptr: %d, rear_ptr: %d, "
                            "size: %d, MAX_SOUND_QUEUE_SIZE: %d) =====\n",
-                           *front_ptr, *rear_ptr, get_queue_size(),
+                           *front_ptr, *rear_ptr, pacq_get_queue_size(),
                            MAX_SOUND_QUEUE_SIZE - 1);
   return queue_str;
 }
 */
 
-int enqueue(const char *sound_name) {
+int pacq_enqueue(const char *sound_name) {
   int r;
   int retval = 0;
-  ssize_t queue_size = get_queue_size();
+  ssize_t queue_size = pacq_get_queue_size();
   if (queue_size > MAX_SOUND_QUEUE_SIZE || queue_size < 0) {
     syslog(LOG_ERR, "unexpected sound_queue internal state, queue_size: %ld",
            queue_size);
@@ -127,9 +132,9 @@ err_pthread_mutex_lock:
   return retval;
 }
 
-char *peek() {
+char *pacq_peek() {
   int r;
-  if (get_queue_size() <= 0) {
+  if (pacq_get_queue_size() <= 0) {
     return NULL;
   }
   if ((r = pthread_mutex_lock(&lock)) != 0) {
@@ -151,10 +156,10 @@ char *peek() {
   return item;
 }
 
-int dequeue() {
+int pacq_dequeue() {
   int retval = 0;
   int res;
-  if (get_queue_size() <= 0) {
+  if (pacq_get_queue_size() <= 0) {
     retval = -1;
     goto err_get_queue_size;
   }
@@ -174,12 +179,12 @@ err_get_queue_size:
   return retval;
 }
 
-void finalize_queue() {
+void pacq_finalize_queue() {
   ssize_t queue_sz;
   while (1) {
-    queue_sz = get_queue_size();
+    queue_sz = pacq_get_queue_size();
     if (queue_sz > 0) {
-      dequeue();
+      pacq_dequeue();
     } else if (queue_sz == 0) {
       syslog(LOG_INFO, "sound_queue cleared.");
       break;

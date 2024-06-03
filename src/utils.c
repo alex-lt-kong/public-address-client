@@ -1,18 +1,21 @@
-#include <linux/limits.h>
-#include <pthread.h>
-#include <stdint.h>
-#include <syslog.h>
+#include "utils.h"
+#include "queue.h"
 
 /* play MP3 files */
 #include <ao/ao.h>
 #include <mpg123.h>
 
-#include "queue.h"
-#include "utils.h"
+#include <linux/limits.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <string.h>
+#include <syslog.h>
 
 const char *sound_repository_path;
 const char *pac_username;
 const char *pac_passwd;
+const char *http_auth_username;
+const char *http_auth_password;
 
 int play_sound(const char *sound_path) {
   int ret_val = 0;
@@ -143,7 +146,7 @@ err_ao_default_driver_id:
 void *handle_sound_name_queue() {
   char *sound_realpath = NULL;
   while (1) {
-    size_t qs = get_queue_size();
+    size_t qs = pacq_get_queue_size();
 
     free(sound_realpath);
     if (qs == 0) {
@@ -152,20 +155,21 @@ void *handle_sound_name_queue() {
           "sound_name_queue cleared, handle_sound_name_queue() thread quited");
       break;
     }
-    sound_realpath = peek();
+    sound_realpath = pacq_peek();
     if (sound_realpath == NULL) {
       syslog(LOG_ERR,
              "Failed to peek() a non-empty queue. The 1st item will be "
-             "directly dequeue()'ed");
+             "directly pacq_dequeue()'ed");
 
-      dequeue();
+      pacq_dequeue();
       continue;
     }
     if (strnlen(sound_realpath, PATH_MAX) >= PATH_MAX) {
-      syslog(LOG_ERR,
-             "sound_realpath [%s] too long. It will be directly dequeue()'ed",
-             sound_realpath);
-      dequeue();
+      syslog(
+          LOG_ERR,
+          "sound_realpath [%s] too long. It will be directly pacq_dequeue()'ed",
+          sound_realpath);
+      pacq_dequeue();
       continue;
     }
 
@@ -175,16 +179,16 @@ void *handle_sound_name_queue() {
     // mpg123/ao will return if the file does not exist without breaking the
     // program
     int retval = play_sound(sound_realpath);
-    dequeue();
+    pacq_dequeue();
     if (retval != 0) {
       syslog(LOG_ERR,
              "Failed to play: [%s], this sound will be removed from "
              "sound_queue anyway, current queue_size: %ld",
-             sound_realpath, get_queue_size());
+             sound_realpath, pacq_get_queue_size());
     } else {
       // use to debug potential deadlock
       syslog(LOG_INFO, "[%s] played successfully, current queue_size: %ld",
-             sound_realpath, get_queue_size());
+             sound_realpath, pacq_get_queue_size());
     }
   }
   return (void *)NULL;
