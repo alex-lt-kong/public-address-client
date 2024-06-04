@@ -16,7 +16,6 @@ with open(os.path.join(curr_dir, '..', 'settings.json')) as f:
 
 sounds_list = [
     'minuet-in-g-major_bach_fade-in.mp3',
-    'salut-damor_爱的问候_edward-elgar_normalized.mp3',
     'a-comme-amour_richard-clayderman_fade-in_normalized.mp3',
     'flat-major-op6-no7-hwv325_george-frideric-handel_fade-in_normalized.mp3',
     'non-existent-sound.mp3',

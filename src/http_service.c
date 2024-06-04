@@ -1,4 +1,5 @@
 #include "http_service.h"
+#include "queue.h"
 #include "utils.h"
 
 #include <arpa/inet.h>
