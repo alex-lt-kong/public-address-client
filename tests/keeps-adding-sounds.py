@@ -29,7 +29,7 @@ sounds_list = [
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 for i in range(max_sounds):
     resp = requests.get(
-        f'https://localhost:{settings["app"]["port"]}/?sound_name={sounds_list[random.randint(0, len(sounds_list)-1)]}',
+        f'https://localhost:{settings["app"]["gv_port"]}/?sound_name={sounds_list[random.randint(0, len(sounds_list)-1)]}',
         verify=False,
         auth=(settings["app"]["username"], settings["app"]["passwd"])
     )

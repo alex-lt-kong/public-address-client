@@ -13,11 +13,13 @@
 #include <string.h>
 #include <syslog.h>
 
-const char *sound_repository_path;
-const char *pac_username;
-const char *pac_passwd;
-const char *http_auth_username;
-const char *http_auth_password;
+char gv_sound_repository_path[PATH_MAX + 1];
+char gv_http_auth_username[NAME_MAX + 1];
+char http_auth_password[NAME_MAX + 1];
+char gv_interface[NAME_MAX + 1];
+unsigned char gv_ssl_key[SSL_FILE_BUFF_SIZE];
+unsigned char gv_ssl_crt[SSL_FILE_BUFF_SIZE];
+int gv_port;
 
 int play_sound(const char *sound_path) {
   int ret_val = 0;
@@ -206,17 +208,18 @@ bool is_file_accessible(const char *file_path) {
   }
 }
 
-int load_ssl_key_or_crt(const char *path, char **out_content) {
+int load_ssl_key_or_crt(const char *path, unsigned char **out_content) {
   FILE *fp;
   int retval = 0;
   fp = fopen(path, "rb");
   if (fp == NULL) {
-    syslog(LOG_ERR, "Failed to fopen() %s", path);
+    syslog(LOG_ERR, "%s.%d: Failed to fopen() %s", __FILE__, __LINE__, path);
     retval = -1;
     goto err_fopen;
   }
 
-  size_t bytes_read = fread(out_content, sizeof(char), SSL_FILE_BUFF_SIZE, fp);
+  size_t bytes_read =
+      fread(out_content, sizeof(unsigned char), SSL_FILE_BUFF_SIZE, fp);
   if (bytes_read > 0) {
   } else if (feof(fp)) {
     syslog(LOG_ERR, "feof() error while reading from [%s]", path);
@@ -249,59 +252,67 @@ int check_sound_repo_validity(const char *sound_repository_path) {
   return 0;
 }
 
-int load_values_from_json(const char *argv0, json_object **json_root_out,
-                          const char **out_interface, int *out_port,
-                          char **out_ssl_crt, char **out_ssl_key) {
-  char bin_path[PATH_MAX], settings_path[PATH_MAX] = "";
-  if (realpath(argv0, bin_path) == NULL) {
-    syslog(LOG_ERR, "realpath() failed: %d(%s)", errno, strerror(errno));
+int load_values_from_json(const char *settings_path) {
+
+  json_object *root = json_object_from_file(settings_path);
+  if (root == NULL) {
+    syslog(LOG_ERR,
+           "%s.%d: json_object_from_file(%s) returned NULL, json file not "
+           "found or malformed?",
+           __FILE__, __LINE__, settings_path);
     return -1;
   }
-  strcpy(settings_path, dirname(bin_path));
-  strcat(settings_path, "/settings.json");
-  json_object *root = json_object_from_file(settings_path);
-  json_object *root_app = json_object_object_get(root, "app");
-  json_object *root_app_port = json_object_object_get(root_app, "port");
-  json_object *root_app_interface =
-      json_object_object_get(root_app, "interface");
-  json_object *root_app_sound_repo_path =
-      json_object_object_get(root_app, "sound_repo_path");
-  json_object *root_app_username = json_object_object_get(root_app, "username");
-  json_object *root_app_passwd = json_object_object_get(root_app, "passwd");
-  json_object *root_app_ssl = json_object_object_get(root_app, "ssl");
-  json_object *root_app_ssl_crt_path =
-      json_object_object_get(root_app_ssl, "crt_path");
-  json_object *root_app_ssl_key_path =
-      json_object_object_get(root_app_ssl, "key_path");
-  json_object *root_app_log_path = json_object_object_get(root_app, "log_path");
+  json_object *root_app;
+  json_object_object_get_ex(root, "app", &root_app);
+  json_object *root_app_port;
+  json_object_object_get_ex(root_app, "port", &root_app_port);
+  json_object *root_app_gv_interface;
+  json_object_object_get_ex(root_app, "interface", &root_app_gv_interface);
+  json_object *root_app_sound_repo_path;
+  json_object_object_get_ex(root_app, "sound_repo_path",
+                            &root_app_sound_repo_path);
+  json_object *root_app_username;
+  json_object_object_get_ex(root_app, "username", &root_app_username);
+  json_object *root_app_passwd;
+  json_object_object_get_ex(root_app, "passwd", &root_app_passwd);
+  json_object *root_app_ssl;
+  json_object_object_get_ex(root_app, "ssl", &root_app_ssl);
+  json_object *root_app_ssl_crt_path;
+  json_object_object_get_ex(root_app_ssl, "crt_path", &root_app_ssl_crt_path);
+  json_object *root_app_ssl_key_path;
+  json_object_object_get_ex(root_app_ssl, "key_path", &root_app_ssl_key_path);
 
-  sound_repository_path = json_object_get_string(root_app_sound_repo_path);
-  if (check_sound_repo_validity(sound_repository_path) < 0) {
+  strncpy(gv_sound_repository_path,
+          json_object_get_string(root_app_sound_repo_path), PATH_MAX);
+  if (check_sound_repo_validity(gv_sound_repository_path) < 0) {
     return -2;
   }
 
-  http_auth_username = json_object_get_string(root_app_username);
-  http_auth_password = json_object_get_string(root_app_passwd);
-  const char *log_path = json_object_get_string(root_app_log_path);
+  strncpy(gv_http_auth_username, json_object_get_string(root_app_username),
+          NAME_MAX);
+  strncpy(http_auth_password, json_object_get_string(root_app_passwd),
+          NAME_MAX);
   const char *ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
   const char *ssl_key_path = json_object_get_string(root_app_ssl_key_path);
 
-  if (log_path == NULL || http_auth_username == NULL ||
-      http_auth_password == NULL || ssl_crt_path == NULL ||
-      ssl_key_path == NULL) {
+  if (strlen(gv_http_auth_username) == 0 || strlen(http_auth_password) == 0 ||
+      ssl_crt_path == NULL || ssl_key_path == NULL) {
     syslog(LOG_ERR, "Some required values are not provided");
     return -3;
   }
-  if (load_ssl_key_or_crt(ssl_crt_path, out_ssl_crt) < 0) {
+  if (load_ssl_key_or_crt(ssl_crt_path, (unsigned char **)&gv_ssl_crt) < 0) {
     syslog(LOG_ERR, "Failed to read SSL certificate file");
     return -4;
   }
-  if (load_ssl_key_or_crt(ssl_key_path, out_ssl_key) < 0) {
+  if (load_ssl_key_or_crt(ssl_key_path, (unsigned char **)&gv_ssl_key) < 0) {
     syslog(LOG_ERR, "Failed to read SSL key file");
     return -4;
   }
-  *out_interface = json_object_get_string(root_app_interface);
-  *out_port = atoi(json_object_get_string(root_app_port));
-  *json_root_out = root;
+
+  strncpy(gv_interface, json_object_get_string(root_app_gv_interface),
+          NAME_MAX);
+  gv_port = atoi(json_object_get_string(root_app_port));
+
+  json_object_put(root);
   return 0;
 }

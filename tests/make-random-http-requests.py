@@ -41,7 +41,7 @@ for i in range(max_sounds):
     if random.randint(0, 2) == 0:
         password = settings["app"]["passwd"]
 
-    url = f'https://{username}:{password}@localhost:{settings["app"]["port"]}/'
+    url = f'https://{username}:{password}@localhost:{settings["app"]["gv_port"]}/'
     if random.randint(0, 4) == 0:
         url += f'?sound_name={sounds_list[random.randint(0, len(sounds_list)-1)]}'
     else:

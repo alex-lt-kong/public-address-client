@@ -148,7 +148,7 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   *ptr = NULL; /* reset when done */
 
   user = MHD_basic_auth_get_username_password(conn, &pass);
-  fail = ((user == NULL) || (0 != strcmp(user, http_auth_username)) ||
+  fail = ((user == NULL) || (0 != strcmp(user, gv_http_auth_username)) ||
           (0 != strcmp(pass, http_auth_password)));
   MHD_free(user);
   MHD_free(pass);
@@ -193,7 +193,7 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
     }
 
     char sound_path[PATH_MAX + 1] = "", sound_realpath[PATH_MAX + 1];
-    strcat(sound_path, sound_repository_path);
+    strcat(sound_path, gv_sound_repository_path);
     strcat(sound_path, sound_name);
     realpath(sound_path, sound_realpath);
     if (is_file_accessible(sound_realpath) == false) {
@@ -206,14 +206,13 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   return resp_404(conn);
 }
 
-struct MHD_Daemon *init_mhd(const char *interface, const int port,
-                            const char *ssl_crt, const char *ssl_key) {
+struct MHD_Daemon *init_mhd() {
 
   struct sockaddr_in server_addr;
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(port);
-  if (inet_pton(AF_INET, interface, &(server_addr.sin_addr)) < 0) {
+  server_addr.sin_port = htons(gv_port);
+  if (inet_pton(AF_INET, gv_interface, &(server_addr.sin_addr)) < 0) {
     syslog(LOG_ERR, "inet_pton() error: %d(%s)", errno, strerror(errno));
     return NULL;
   }
@@ -222,18 +221,19 @@ struct MHD_Daemon *init_mhd(const char *interface, const int port,
   // clang-format off
   daemon = MHD_start_daemon(
                        MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_DEBUG | MHD_USE_TLS,
-                       port, NULL,
+                       gv_port, NULL,
                        NULL, &request_handler, "",
                        MHD_OPTION_CONNECTION_TIMEOUT, 256,
                        MHD_OPTION_SOCK_ADDR, (struct sockaddr *)&server_addr,
-                       MHD_OPTION_HTTPS_MEM_CERT, ssl_crt,
-                       MHD_OPTION_HTTPS_MEM_KEY, ssl_key,
+                       MHD_OPTION_HTTPS_MEM_CERT, gv_ssl_crt,
+                       MHD_OPTION_HTTPS_MEM_KEY, gv_ssl_key,
                        MHD_OPTION_END);
   // clang-format on
   if (daemon == NULL) {
     syslog(LOG_ERR, "MHD_start_daemon() failed");
     return NULL;
   }
-  syslog(LOG_INFO, "HTTP server listening on https://%s:%d", interface, port);
+  syslog(LOG_INFO, "HTTP server listening on https://%s:%d", gv_interface,
+         gv_port);
   return daemon;
 }

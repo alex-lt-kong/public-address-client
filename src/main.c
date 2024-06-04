@@ -10,6 +10,7 @@
 
 #include <dirent.h> /* Check directory's existence*/
 #include <errno.h>
+#include <getopt.h>
 #include <linux/limits.h>
 #include <netdb.h>
 #include <signal.h>
@@ -22,7 +23,7 @@
 volatile sig_atomic_t e_flag = 0;
 
 static void signal_handler(int signum) {
-  char msg[] = "Signal [  ] caught\n";
+  char msg[] = "Signal [  ] caught, exiting\n";
   msg[8] = '0' + (char)(signum / 10);
   msg[9] = '0' + (char)(signum % 10);
   write(STDIN_FILENO, msg, strlen(msg));
@@ -54,12 +55,35 @@ int install_signal_handler() {
   return 0;
 }
 
-int main(__attribute__((unused)) int argc, char **argv) {
+void print_usage(const char *binary_name) {
+
+  printf("Usage: %s [OPTION]\n\n", binary_name);
+
+  printf("Options:\n"
+         "  --help,        -h        Display this help and exit\n"
+         "  --config-path, -c        Path of JSON format configuration file\n");
+}
+
+const char *parse_args(int argc, char *argv[]) {
+  static struct option long_options[] = {
+      {"config-path", required_argument, 0, 'c'},
+      {"help", optional_argument, 0, 'h'},
+      {0, 0, 0, 0}};
+  int opt, option_idx = 0;
+  while ((opt = getopt_long(argc, argv, "c:h", long_options, &option_idx)) !=
+         -1) {
+    switch (opt) {
+    case 'c':
+      // optarg it is a pointer into the original argv array
+      return optarg;
+    }
+  }
+  print_usage(argv[0]);
+  _exit(1);
+}
+int main(int argc, char **argv) {
   int retval = 0;
-  const char *interface; // Lifecycle is managed by json_object, don't free()
-  int port;
-  char ssl_key[SSL_FILE_BUFF_SIZE], ssl_crt[SSL_FILE_BUFF_SIZE];
-  json_object *json_root;
+  const char *config_path = parse_args(argc, argv);
 
   (void)openlog(PROGRAM_NAME, LOG_PID | LOG_CONS, 0);
 
@@ -68,13 +92,8 @@ int main(__attribute__((unused)) int argc, char **argv) {
     goto err_install_sighandler;
   }
 
-  if (load_values_from_json(argv[0], &json_root, &interface, &port,
-                            (char **)(&ssl_crt), (char **)(&ssl_key)) < 0) {
+  if (load_values_from_json(config_path) < 0) {
     retval = -1;
-    if (json_root == NULL) {
-      syslog(LOG_ERR, "Failed to parse JSON file");
-      goto err_invalid_json;
-    }
     syslog(LOG_ERR, "Invalid configuration");
     goto err_invalid_config;
   }
@@ -83,7 +102,7 @@ int main(__attribute__((unused)) int argc, char **argv) {
     retval = -1;
     goto err_init_queue;
   }
-  struct MHD_Daemon *d = init_mhd(interface, port, ssl_crt, ssl_key);
+  struct MHD_Daemon *d = init_mhd();
   if (d == NULL) {
     retval = -1;
     goto err_init_mhd;
@@ -101,8 +120,6 @@ err_init_mhd:
   pacq_finalize_queue();
 err_init_queue:
 err_invalid_config:
-  json_object_put(json_root);
-err_invalid_json:
 err_install_sighandler:
   closelog();
   return retval;
