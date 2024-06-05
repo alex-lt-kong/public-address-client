@@ -33,13 +33,14 @@ static void signal_handler(int signum) {
 int install_signal_handler() {
   // This design canNOT handle more than 99 signal types
   if (_NSIG > 99) {
-    syslog(LOG_ERR, "signal_handler() can't handle more than 99 signals");
+    syslog(LOG_ERR, "%s.%d: signal_handler() can't handle more than 99 signals",
+           __FILE__, __LINE__);
     return -1;
   }
   struct sigaction act;
   // Initialize the signal set to empty, similar to memset(0)
   if (sigemptyset(&act.sa_mask) == -1) {
-    syslog(LOG_ERR, "sigemptyset()");
+    syslog(LOG_ERR, "%s.%d: sigemptyset() failed", __FILE__, __LINE__);
     return -2;
   }
   act.sa_handler = signal_handler;
@@ -49,7 +50,7 @@ int install_signal_handler() {
   act.sa_flags = SA_RESETHAND;
   // act.sa_flags = 0;
   if (sigaction(SIGINT, &act, 0) == -1 || sigaction(SIGTERM, &act, 0) == -1) {
-    syslog(LOG_ERR, "sigaction()");
+    syslog(LOG_ERR, "%s.%d: sigaction() failed", __FILE__, __LINE__);
     return -3;
   }
   return 0;
@@ -82,29 +83,37 @@ const char *parse_args(int argc, char *argv[]) {
   _exit(1);
 }
 int main(int argc, char **argv) {
-  int retval = 0;
+  int retval = 0, r;
   const char *config_path = parse_args(argc, argv);
 
-  (void)openlog(PROGRAM_NAME, LOG_PID | LOG_CONS, 0);
+  (void)openlog(PROGRAM_NAME, LOG_PID | LOG_CONS, LOG_USER);
 
-  if (install_signal_handler() < 0) {
+  if ((r = install_signal_handler()) < 0) {
     retval = -1;
-    goto err_install_sighandler;
+    syslog(LOG_ERR, "%s.%d: install_signal_handler() failed, retval: %d",
+           __FILE__, __LINE__, r);
+    goto err_mhd_not_ran_yet;
   }
 
-  if (load_values_from_json(config_path) < 0) {
-    retval = -1;
-    syslog(LOG_ERR, "Invalid configuration");
-    goto err_invalid_config;
+  if ((r = load_values_from_json(config_path)) < 0) {
+    retval = -2;
+    syslog(LOG_ERR,
+           "%s.%d: load_values_from_json() failed, probably due to malformed "
+           "JSON. retval: %d",
+           __FILE__, __LINE__, r);
+    goto err_mhd_not_ran_yet;
   }
 
-  if (pacq_initialize_queue() < 0) {
-    retval = -1;
-    goto err_init_queue;
+  if ((r = pacq_initialize_queue()) < 0) {
+    retval = -3;
+    syslog(LOG_ERR, "%s.%d: pacq_initialize_queue() failed. retval: %d",
+           __FILE__, __LINE__, r);
+    goto err_mhd_not_ran_yet;
   }
   struct MHD_Daemon *d = init_mhd();
   if (d == NULL) {
-    retval = -1;
+    retval = -4;
+    syslog(LOG_ERR, "%s.%d: init_mhd() failed.", __FILE__, __LINE__);
     goto err_init_mhd;
   }
   syslog(LOG_INFO, "initialized");
@@ -114,13 +123,12 @@ int main(int argc, char **argv) {
   while (e_flag == 0) {
     sleep(1);
   }
+
   syslog(LOG_INFO, "exiting");
   MHD_stop_daemon(d);
 err_init_mhd:
   pacq_finalize_queue();
-err_init_queue:
-err_invalid_config:
-err_install_sighandler:
+err_mhd_not_ran_yet:
   closelog();
   return retval;
 }

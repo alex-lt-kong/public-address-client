@@ -237,16 +237,16 @@ err_fopen:
 int check_sound_repo_validity(const char *sound_repository_path) {
   if (sound_repository_path == NULL ||
       strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
-    syslog(LOG_ERR, "sound_repository [%s] is either NULL or too long",
-           sound_repository_path);
+    syslog(LOG_ERR, "%s.%d: sound_repository [%s] is either NULL or too long",
+           __FILE__, __LINE__, sound_repository_path);
     return -1;
   }
   DIR *dir = opendir(sound_repository_path);
   if (dir) { // exist
     closedir(dir);
   } else {
-    syslog(LOG_ERR, "sound_repository [%s] is inaccessible.",
-           sound_repository_path);
+    syslog(LOG_ERR, "%s.%d: sound_repository [%s] is inaccessible", __FILE__,
+           __LINE__, sound_repository_path);
     return -2;
   }
   return 0;
@@ -297,15 +297,17 @@ int load_values_from_json(const char *settings_path) {
 
   if (strlen(gv_http_auth_username) == 0 || strlen(http_auth_password) == 0 ||
       ssl_crt_path == NULL || ssl_key_path == NULL) {
-    syslog(LOG_ERR, "Some required values are not provided");
+    syslog(LOG_ERR, "%s.%d: Some required values are not provided", __FILE__,
+           __LINE__);
     return -3;
   }
   if (load_ssl_key_or_crt(ssl_crt_path, (unsigned char **)&gv_ssl_crt) < 0) {
-    syslog(LOG_ERR, "Failed to read SSL certificate file");
+    syslog(LOG_ERR, "%s.%d: Failed to read SSL certificate file", __FILE__,
+           __LINE__);
     return -4;
   }
   if (load_ssl_key_or_crt(ssl_key_path, (unsigned char **)&gv_ssl_key) < 0) {
-    syslog(LOG_ERR, "Failed to read SSL key file");
+    syslog(LOG_ERR, "%s.%d: Failed to read SSL key file", __FILE__, __LINE__);
     return -4;
   }
 

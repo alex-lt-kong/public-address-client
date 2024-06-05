@@ -5,7 +5,12 @@
 
 #define MAX_SOUND_QUEUE_SIZE 32
 
-// This function is not thread-safe and should only be called once
+/**
+ * This function is not thread-safe and should only be called once.
+ * If pacq_initialize_queue() call is successful, users need to call
+ * pacq_finalize_queue() to release resources.
+ * @returns 0 if the queue is successfully initialized or a error code on error
+ */
 int pacq_initialize_queue();
 
 ssize_t pacq_get_queue_size();
@@ -17,8 +22,9 @@ ssize_t pacq_get_queue_size();
 int pacq_enqueue(const char *sound_name);
 
 /**
- * Return a pointer to sound_name at front_ptr or NULL in case of empty queue or
- * memory allocation failure. Caller needs to free() the char pointer after use.
+ * @returns Return a pointer to sound_name at front_ptr or NULL in case of empty
+ * queue or memory allocation failure. Caller needs to free() the char pointer
+ * after use.
  */
 char *pacq_peek();
 
