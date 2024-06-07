@@ -1,13 +1,14 @@
 {
-    "app": {
-        "port": "8080",
-        "interface": "0.0.0.0",
-        "username": "pac_user",
-        "passwd": "pac_passwd",
-        "ssl": {
-            "key_path": "/etc/ssl/pac.key",
-            "crt_path": "/etc/ssl/pac.crt"
-        },
-        "sound_repo_path": "/mnt/sound-repo/"
-    }
+  "app": {
+    "port": "8080",
+    "interface": "0.0.0.0",
+    "username": "pac_user",
+    "passwd": "pac_passwd",
+    "ssl": {
+      "enabled": true,
+      "key_path": "/etc/ssl/pac.key",
+      "crt_path": "/etc/ssl/pac.crt"
+    },
+    "sound_repo_path": "/mnt/sound-repo/"
+  }
 }

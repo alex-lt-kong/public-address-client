@@ -4,6 +4,7 @@
 /* play MP3 files */
 #include <ao/ao.h>
 #include <dirent.h>
+#include <json-c/json_object.h>
 #include <mpg123.h>
 
 #include <libgen.h> /* dirname() */
@@ -17,8 +18,10 @@ char gv_sound_repository_path[PATH_MAX + 1];
 char gv_http_auth_username[NAME_MAX + 1];
 char http_auth_password[NAME_MAX + 1];
 char gv_interface[NAME_MAX + 1];
-unsigned char gv_ssl_key[SSL_FILE_BUFF_SIZE];
-unsigned char gv_ssl_crt[SSL_FILE_BUFF_SIZE];
+
+// gv_ssl_key and gv_ssl_crt are string, not bytes
+char gv_ssl_key[SSL_FILE_BUFF_SIZE];
+char gv_ssl_crt[SSL_FILE_BUFF_SIZE];
 int gv_port;
 
 int play_sound(const char *sound_path) {
@@ -213,7 +216,8 @@ int load_ssl_key_or_crt(const char *path, unsigned char **out_content) {
   int retval = 0;
   fp = fopen(path, "rb");
   if (fp == NULL) {
-    syslog(LOG_ERR, "%s.%d: Failed to fopen() %s", __FILE__, __LINE__, path);
+    syslog(LOG_ERR, "%s.%d: Failed to fopen() path [%s]: %d(%s)", __FILE__,
+           __LINE__, path, errno, strerror(errno));
     retval = -1;
     goto err_fopen;
   }
@@ -277,6 +281,8 @@ int load_values_from_json(const char *settings_path) {
   json_object_object_get_ex(root_app, "passwd", &root_app_passwd);
   json_object *root_app_ssl;
   json_object_object_get_ex(root_app, "ssl", &root_app_ssl);
+  json_object *root_app_ssl_enabled;
+  json_object_object_get_ex(root_app_ssl, "enabled", &root_app_ssl_enabled);
   json_object *root_app_ssl_crt_path;
   json_object_object_get_ex(root_app_ssl, "crt_path", &root_app_ssl_crt_path);
   json_object *root_app_ssl_key_path;
@@ -292,25 +298,35 @@ int load_values_from_json(const char *settings_path) {
           NAME_MAX);
   strncpy(http_auth_password, json_object_get_string(root_app_passwd),
           NAME_MAX);
+  json_bool ssl_enabled = json_object_get_boolean(root_app_ssl_enabled);
   const char *ssl_crt_path = json_object_get_string(root_app_ssl_crt_path);
   const char *ssl_key_path = json_object_get_string(root_app_ssl_key_path);
 
   if (strlen(gv_http_auth_username) == 0 || strlen(http_auth_password) == 0 ||
-      ssl_crt_path == NULL || ssl_key_path == NULL) {
+      (ssl_enabled && (ssl_crt_path == NULL || ssl_key_path == NULL))) {
     syslog(LOG_ERR, "%s.%d: Some required values are not provided", __FILE__,
            __LINE__);
     return -3;
   }
-  if (load_ssl_key_or_crt(ssl_crt_path, (unsigned char **)&gv_ssl_crt) < 0) {
-    syslog(LOG_ERR, "%s.%d: Failed to read SSL certificate file", __FILE__,
-           __LINE__);
-    return -4;
+  if (ssl_enabled) {
+    if (load_ssl_key_or_crt(ssl_crt_path, (unsigned char **)&gv_ssl_crt) < 0) {
+      syslog(LOG_ERR, "%s.%d: Failed to read SSL certificate file", __FILE__,
+             __LINE__);
+      return -4;
+    }
+    if (load_ssl_key_or_crt(ssl_key_path, (unsigned char **)&gv_ssl_key) < 0) {
+      syslog(LOG_ERR, "%s.%d: Failed to read SSL key file", __FILE__, __LINE__);
+      return -4;
+    }
+    if (strlen(gv_ssl_crt) == 0 || strlen(gv_ssl_key) == 0) {
+      syslog(LOG_ERR, "%s.%d: Either gv_ssl_crt or gv_ssl_key is empty",
+             __FILE__, __LINE__);
+      return -4;
+    }
+  } else {
+    gv_ssl_crt[0] = '\0';
+    gv_ssl_key[0] = '\0';
   }
-  if (load_ssl_key_or_crt(ssl_key_path, (unsigned char **)&gv_ssl_key) < 0) {
-    syslog(LOG_ERR, "%s.%d: Failed to read SSL key file", __FILE__, __LINE__);
-    return -4;
-  }
-
   strncpy(gv_interface, json_object_get_string(root_app_gv_interface),
           NAME_MAX);
   gv_port = atoi(json_object_get_string(root_app_port));

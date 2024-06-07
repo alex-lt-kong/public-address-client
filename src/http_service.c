@@ -61,18 +61,21 @@ enum MHD_Result resp_404(struct MHD_Connection *conn) {
 }
 
 enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
-                                        const char *sound_name,
+                                        const char *sound_name, int delay_ms,
                                         const char *sound_realpath) {
   enum MHD_Result ret;
   struct MHD_Response *resp = NULL;
   char msg[PATH_MAX];
   int r;
   ssize_t qs = pacq_get_queue_size();
+
+  delay_ms = delay_ms > 2000 ? 2000 : delay_ms;
+  usleep(delay_ms * 1000);
   if (pacq_enqueue(sound_realpath) == 0) {
     if (qs == 0) { // i.e., before pacq_enqueue() the queue is empty, so we
                    // start a new handle_sound_name_queue thread.
-      syslog(LOG_INFO, "sound_queue is currently empty, starting new thread to "
-                       "handle the queue.");
+      syslog(LOG_INFO,
+             "sound_queue is empty, starting a thread to handle the it");
       pthread_t my_thread;
       if (pthread_create(&my_thread, NULL, handle_sound_name_queue, NULL) !=
           0) {
@@ -96,9 +99,10 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
     }
 
     snprintf(msg, PATH_MAX - 1,
-             "[%s] added to sound_queue, sound_queue_size: %zd "
+             "[%s] added to sound_queue (after adding %d ms of delay for "
+             "synchornization purpose), sound_queue_size: %zd "
              "(MAX_SOUND_QUEUE_SIZE: %d)",
-             sound_name, pacq_get_queue_size(), MAX_SOUND_QUEUE_SIZE);
+             sound_name, delay_ms, pacq_get_queue_size(), MAX_SOUND_QUEUE_SIZE);
     syslog(LOG_INFO, "%s", msg);
     resp = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
                                            MHD_RESPMEM_MUST_COPY);
@@ -109,14 +113,13 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
   }
   if (qs == MAX_SOUND_QUEUE_SIZE) {
     snprintf(msg, PATH_MAX - 1,
-             "queue is full, new sound discarded. queue_size: %zd, "
+             "sound_queue is full, new sound discarded. queue_size: %zd, "
              "MAX_SOUND_QUEUE_SIZE: %d",
              qs, MAX_SOUND_QUEUE_SIZE);
   } else {
-    snprintf(msg, PATH_MAX - 1,
-             "Server has not enough free memory, new sound discarded.");
+    snprintf(msg, PATH_MAX - 1, "Unknown internal error, new sound discarded.");
   }
-  syslog(LOG_ERR, "%s", msg);
+  syslog(LOG_ERR, "%s.%d: %s", __FILE__, __LINE__, msg);
   resp = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
                                          MHD_RESPMEM_MUST_COPY);
   ret = MHD_queue_response(conn, MHD_HTTP_INTERNAL_SERVER_ERROR, resp);
@@ -147,6 +150,8 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
   }
   *ptr = NULL; /* reset when done */
 
+  // The authentication function is modelled after this official example:
+  // https://www.gnu.org/software/libmicrohttpd/tutorial.html#basicauthentication_002ec
   user = MHD_basic_auth_get_username_password(conn, &pass);
   fail = ((user == NULL) || (0 != strcmp(user, gv_http_auth_username)) ||
           (0 != strcmp(pass, http_auth_password)));
@@ -199,8 +204,7 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
     if (is_file_accessible(sound_realpath) == false) {
       return resp_sound_inaccessible(conn, sound_name);
     }
-    usleep(delay_ms * 1000);
-    return resp_add_sound_to_queue(conn, sound_name, sound_realpath);
+    return resp_add_sound_to_queue(conn, sound_name, delay_ms, sound_realpath);
   }
 
   return resp_404(conn);
@@ -213,27 +217,35 @@ struct MHD_Daemon *init_mhd() {
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(gv_port);
   if (inet_pton(AF_INET, gv_interface, &(server_addr.sin_addr)) < 0) {
-    syslog(LOG_ERR, "inet_pton() error: %d(%s)", errno, strerror(errno));
+    syslog(LOG_ERR, "%s.%d: inet_pton() error: %d(%s)", __FILE__, __LINE__,
+           errno, strerror(errno));
     return NULL;
   }
 
   struct MHD_Daemon *daemon;
+  bool ssl_enabled = strlen(gv_ssl_crt) > 0 && strlen(gv_ssl_key) > 0;
   // clang-format off
-  daemon = MHD_start_daemon(
-                       MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_DEBUG | MHD_USE_TLS,
-                       gv_port, NULL,
-                       NULL, &request_handler, "",
-                       MHD_OPTION_CONNECTION_TIMEOUT, 256,
-                       MHD_OPTION_SOCK_ADDR, (struct sockaddr *)&server_addr,
-                       MHD_OPTION_HTTPS_MEM_CERT, gv_ssl_crt,
-                       MHD_OPTION_HTTPS_MEM_KEY, gv_ssl_key,
-                       MHD_OPTION_END);
+  daemon = ssl_enabled ?
+    MHD_start_daemon(
+      MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_AUTO | MHD_USE_DEBUG | MHD_USE_TLS,
+      gv_port, NULL, NULL, &request_handler, "",
+      MHD_OPTION_CONNECTION_TIMEOUT, 256,
+      MHD_OPTION_SOCK_ADDR, (struct sockaddr *)&server_addr,
+      MHD_OPTION_HTTPS_MEM_CERT, gv_ssl_crt,
+      MHD_OPTION_HTTPS_MEM_KEY, gv_ssl_key,
+      MHD_OPTION_END) :
+    MHD_start_daemon(
+      MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_AUTO | MHD_USE_DEBUG,
+      gv_port, NULL, NULL, &request_handler, "",
+      MHD_OPTION_CONNECTION_TIMEOUT, 256,
+      MHD_OPTION_SOCK_ADDR, (struct sockaddr *)&server_addr,
+      MHD_OPTION_END);
   // clang-format on
   if (daemon == NULL) {
-    syslog(LOG_ERR, "MHD_start_daemon() failed");
+    syslog(LOG_ERR, "%s.%d: MHD_start_daemon() failed", __FILE__, __LINE__);
     return NULL;
   }
-  syslog(LOG_INFO, "HTTP server listening on https://%s:%d", gv_interface,
-         gv_port);
+  syslog(LOG_INFO, "HTTP server listening on %s://%s:%d",
+         ssl_enabled ? "https" : "http", gv_interface, gv_port);
   return daemon;
 }

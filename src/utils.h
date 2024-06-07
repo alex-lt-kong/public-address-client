@@ -20,8 +20,9 @@ extern char gv_sound_repository_path[];
 extern char gv_http_auth_username[];
 extern char http_auth_password[];
 extern char gv_interface[];
-extern unsigned char gv_ssl_key[SSL_FILE_BUFF_SIZE];
-extern unsigned char gv_ssl_crt[SSL_FILE_BUFF_SIZE];
+// gv_ssl_key and gv_ssl_crt are string, not bytes
+extern char gv_ssl_key[SSL_FILE_BUFF_SIZE];
+extern char gv_ssl_crt[SSL_FILE_BUFF_SIZE];
 extern int gv_port;
 
 int play_sound(const char *sound_path);
