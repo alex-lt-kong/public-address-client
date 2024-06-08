@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -O3 -Wall -pedantic -Wextra -Wc++-compat
 LDFLAGS = -lmicrohttpd -lpthread -lmpg123 -lao -ljson-c
 #SANITIZER = -fsanitize=address -g
-SANITIZER = -fsanitize=undefined -g
+#SANITIZER = -fsanitize=undefined -g
 #SANITIZER = -fsanitize=leak -g
 LDFLAGS += $(SANITIZER)
 

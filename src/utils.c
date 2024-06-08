@@ -258,13 +258,13 @@ int check_sound_repo_validity(const char *sound_repository_path) {
 
 int load_values_from_json(const char *settings_path) {
 
+  int retval = 0;
   json_object *root = json_object_from_file(settings_path);
   if (root == NULL) {
-    syslog(LOG_ERR,
-           "%s.%d: json_object_from_file(%s) returned NULL, json file not "
-           "found or malformed?",
-           __FILE__, __LINE__, settings_path);
-    return -1;
+    syslog(LOG_ERR, "%s.%d: json_object_from_file(%s) returned NULL: %s",
+           __FILE__, __LINE__, settings_path, json_util_get_last_err());
+    retval = -1;
+    goto err_json_parsing;
   }
   json_object *root_app;
   json_object_object_get_ex(root, "app", &root_app);
@@ -291,7 +291,8 @@ int load_values_from_json(const char *settings_path) {
   strncpy(gv_sound_repository_path,
           json_object_get_string(root_app_sound_repo_path), PATH_MAX);
   if (check_sound_repo_validity(gv_sound_repository_path) < 0) {
-    return -2;
+    retval = -2;
+    goto err_invalid_config;
   }
 
   strncpy(gv_http_auth_username, json_object_get_string(root_app_username),
@@ -306,22 +307,26 @@ int load_values_from_json(const char *settings_path) {
       (ssl_enabled && (ssl_crt_path == NULL || ssl_key_path == NULL))) {
     syslog(LOG_ERR, "%s.%d: Some required values are not provided", __FILE__,
            __LINE__);
-    return -3;
+    retval = -3;
+    goto err_invalid_config;
   }
   if (ssl_enabled) {
     if (load_ssl_key_or_crt(ssl_crt_path, (unsigned char **)&gv_ssl_crt) < 0) {
       syslog(LOG_ERR, "%s.%d: Failed to read SSL certificate file", __FILE__,
              __LINE__);
-      return -4;
+      retval = -4;
+      goto err_invalid_config;
     }
     if (load_ssl_key_or_crt(ssl_key_path, (unsigned char **)&gv_ssl_key) < 0) {
       syslog(LOG_ERR, "%s.%d: Failed to read SSL key file", __FILE__, __LINE__);
-      return -4;
+      retval = -5;
+      goto err_invalid_config;
     }
     if (strlen(gv_ssl_crt) == 0 || strlen(gv_ssl_key) == 0) {
       syslog(LOG_ERR, "%s.%d: Either gv_ssl_crt or gv_ssl_key is empty",
              __FILE__, __LINE__);
-      return -4;
+      retval = -6;
+      goto err_invalid_config;
     }
   } else {
     gv_ssl_crt[0] = '\0';
@@ -330,7 +335,8 @@ int load_values_from_json(const char *settings_path) {
   strncpy(gv_interface, json_object_get_string(root_app_gv_interface),
           NAME_MAX);
   gv_port = atoi(json_object_get_string(root_app_port));
-
+err_invalid_config:
   json_object_put(root);
-  return 0;
+err_json_parsing:
+  return retval;
 }
