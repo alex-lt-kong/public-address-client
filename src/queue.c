@@ -23,7 +23,7 @@ int pacq_initialize_queue() {
   front_ptr = (int *)malloc(sizeof(int));
   rear_ptr = (int *)malloc(sizeof(int));
   if (sound_queue == NULL || front_ptr == NULL || rear_ptr == NULL) {
-    syslog(LOG_ERR, "malloc() failed: %d(%s)", errno, strerror(errno));
+    SYSLOG_ERR("malloc() failed: %d(%s)", errno, strerror(errno));
     free(sound_queue);
     free(rear_ptr);
     free(front_ptr);
@@ -31,7 +31,7 @@ int pacq_initialize_queue() {
   }
   int retval = pthread_mutex_init(&lock, NULL);
   if (retval != 0) {
-    syslog(LOG_ERR, "pthread_mutex_init() failed: %d", retval);
+    SYSLOG_ERR("pthread_mutex_init() failed: %d", retval);
     free(sound_queue);
     free(rear_ptr);
     free(front_ptr);
@@ -46,13 +46,13 @@ ssize_t pacq_get_queue_size() {
   int r;
   ssize_t queue_sz = 0;
   if ((r = pthread_mutex_lock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_lock() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_lock() failed: %d", r);
     queue_sz = -1;
     goto err_pthread_mutex_lock;
   }
 
   if (sound_queue == NULL || front_ptr == NULL || rear_ptr == NULL) {
-    syslog(LOG_ERR, "Unexpected internal sound_queue state: not initialized");
+    SYSLOG_ERR("Unexpected internal sound_queue state: not initialized");
     queue_sz = -1;
   } else {
     // To make pacq_get_queue_size()/pacq_enqueue()/dequeue() work correctly, we
@@ -61,7 +61,7 @@ ssize_t pacq_get_queue_size() {
                (MAX_SOUND_QUEUE_SIZE + 1);
   }
   if ((r = pthread_mutex_unlock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_unlock() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_unlock() failed: %d", r);
   }
 err_pthread_mutex_lock:
   return queue_sz;
@@ -74,7 +74,7 @@ char *list_queue_items() {
   size_t queue_str_len = 0;
 
   if (queue_str == NULL) {
-    syslog(LOG_ERR, "malloc() failed");
+    SYSLOG_ERR( "malloc() failed");
     return NULL;
   }
   queue_str_len += sprintf(queue_str + queue_str_len,
@@ -100,25 +100,25 @@ int pacq_enqueue(const char *sound_name) {
   int retval = 0;
   ssize_t queue_size = pacq_get_queue_size();
   if (queue_size > MAX_SOUND_QUEUE_SIZE || queue_size < 0) {
-    SYSLOG_ERR("unexpected sound_queue internal state, queue_size: %d",
+    SYSLOG_ERR("unexpected sound_queue internal state, queue_size: %zd",
                queue_size);
     return -1;
   }
   if (queue_size == MAX_SOUND_QUEUE_SIZE) {
     syslog(LOG_WARNING,
-           "sound_queue full, queue_size: %d, MAX_SOUND_QUEUE_SIZE: %d",
+           "sound_queue full, queue_size: %zd, MAX_SOUND_QUEUE_SIZE: %d",
            queue_size, MAX_SOUND_QUEUE_SIZE);
     return -1;
   }
   if ((r = pthread_mutex_lock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_lock() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_lock() failed: %d", r);
     retval = -1;
     goto err_pthread_mutex_lock;
   }
   sound_queue[*rear_ptr] =
       (char *)malloc((strlen(sound_name) + 1) * sizeof(char));
   if (sound_queue[*rear_ptr] == NULL) {
-    syslog(LOG_ERR, "malloc() failed");
+    SYSLOG_ERR("malloc() failed");
     retval = -2;
     goto err_malloc_failed;
   }
@@ -127,7 +127,7 @@ int pacq_enqueue(const char *sound_name) {
   *rear_ptr %= (MAX_SOUND_QUEUE_SIZE + 1);
 err_malloc_failed:
   if ((r = pthread_mutex_unlock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_unlock() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_unlock() failed: %d", r);
   }
 err_pthread_mutex_lock:
   return retval;
@@ -139,20 +139,20 @@ char *pacq_peek() {
     return NULL;
   }
   if ((r = pthread_mutex_lock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_lock() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_lock() failed: %d", r);
   }
   char *item =
       (char *)malloc((strlen(sound_queue[*front_ptr]) + 1) * sizeof(char));
   if (item == NULL) {
-    syslog(LOG_ERR, "malloc() failed");
+    SYSLOG_ERR("malloc() failed");
     if ((r = pthread_mutex_unlock(&lock)) != 0) {
-      syslog(LOG_ERR, "pthread_mutex_unlock() failed: %d", r);
+      SYSLOG_ERR("pthread_mutex_unlock() failed: %d", r);
     }
     return NULL;
   }
   strcpy(item, sound_queue[*front_ptr]);
   if ((r = pthread_mutex_unlock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_unlock() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_unlock() failed: %d", r);
   }
   return item;
 }
@@ -165,7 +165,7 @@ int pacq_dequeue() {
     goto err_get_queue_size;
   }
   if ((res = pthread_mutex_lock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_lock() failed: %d", res);
+    SYSLOG_ERR("pthread_mutex_lock() failed: %d", res);
     retval = -1;
     goto err_pthread_mutex_lock;
   }
@@ -173,7 +173,7 @@ int pacq_dequeue() {
   ++(*front_ptr);
   (*front_ptr) %= (MAX_SOUND_QUEUE_SIZE + 1);
   if ((res = pthread_mutex_unlock(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_unlock() failed: %d", res);
+    SYSLOG_ERR("pthread_mutex_unlock() failed: %d", res);
   }
 err_pthread_mutex_lock:
 err_get_queue_size:
@@ -190,13 +190,13 @@ void pacq_finalize_queue() {
       SYSLOG_INFO("sound_queue cleared.");
       break;
     } else {
-      syslog(LOG_ERR, "sound_queue in an unexpected state.");
+      SYSLOG_ERR("sound_queue in an unexpected state.");
       break;
     }
   }
   int r;
   if ((r = pthread_mutex_destroy(&lock)) != 0) {
-    syslog(LOG_ERR, "pthread_mutex_destroy() failed: %d", r);
+    SYSLOG_ERR("pthread_mutex_destroy() failed: %d", r);
   }
   free(sound_queue);
   free(front_ptr);

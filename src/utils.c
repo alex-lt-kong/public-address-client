@@ -48,8 +48,7 @@ int play_sound(const char *sound_path) {
   (void)ao_initialize();
   driver_id = ao_default_driver_id();
   if (driver_id < 0) {
-    syslog(LOG_ERR,
-           "ao_default_driver_id() failed to find an available driver");
+    SYSLOG_ERR("ao_default_driver_id() failed to find an available driver");
     ret_val = -1;
     goto err_ao_default_driver_id;
   }
@@ -59,17 +58,16 @@ int play_sound(const char *sound_path) {
   // is to be compatible with old versions of the library that still require it.
   ret_val = mpg123_init();
   if (ret_val != MPG123_OK) {
-    syslog(LOG_ERR, "mpg123_init() failed, returned: %d", ret_val);
+    SYSLOG_ERR("mpg123_init() failed, returned: %d", ret_val);
     ret_val = -1;
     goto err_mpg123_init;
   }
 
   mh = mpg123_new(NULL, &err);
   if (mh == NULL) {
-    syslog(LOG_ERR,
-           "failed to create an mpg123_handle by calling mpg123_new(). "
-           "Error code: %d",
-           err);
+    SYSLOG_ERR("failed to create an mpg123_handle by calling mpg123_new(). "
+               "Error code: %d",
+               err);
     ret_val = -1;
     goto err_mpg123_new;
   }
@@ -78,21 +76,21 @@ int play_sound(const char *sound_path) {
   buffer_size = mpg123_outblock(mh);
   buffer = (unsigned char *)malloc(buffer_size * sizeof(unsigned char));
   if (buffer == NULL) {
-    syslog(LOG_ERR, "malloc() buffer failed");
+    SYSLOG_ERR("malloc() buffer failed");
     ret_val = -1;
     goto err_buffer_malloc;
   }
   /* open the file and get the decoding format */
   ret_val = mpg123_open(mh, sound_path);
   if (ret_val != MPG123_OK) {
-    syslog(LOG_ERR, "mpg123_open() failed, err: %d", ret_val);
+    SYSLOG_ERR("mpg123_open() failed, err: %d", ret_val);
     ret_val = -1;
     goto err_mpg123_open;
   }
 
   ret_val = mpg123_getformat(mh, &rate, &channels, &encoding);
   if (ret_val != MPG123_OK) {
-    syslog(LOG_ERR, "mpg123_getformat() failed, err: %d", ret_val);
+    SYSLOG_ERR("mpg123_getformat() failed, err: %d", ret_val);
     ret_val = -1;
     goto err_mpg123_getformat;
   }
@@ -100,8 +98,8 @@ int play_sound(const char *sound_path) {
   /* set the output format and open the output device */
   format.bits = mpg123_encsize(encoding) * 8;
   if (format.bits == 0) {
-    syslog(LOG_ERR,
-           "mpg123_encsize() returns 0, meaning that format is not supported");
+    SYSLOG_ERR(
+        "mpg123_encsize() returns 0, meaning that format is not supported");
     ret_val = -1;
     goto err_mpg123_encsize;
   }
@@ -113,8 +111,7 @@ int play_sound(const char *sound_path) {
   // This function call is a common point of failure, doc here:
   // https://xiph.org/ao/doc/ao_open_live.html
   if (dev == NULL) {
-    syslog(LOG_ERR, "ao_open_live() returns NULL: %d (%s)", errno,
-           strerror(errno));
+    SYSLOG_ERR("ao_open_live() returns NULL: %d (%s)", errno, strerror(errno));
     ret_val = -1;
     goto err_ao_open_live;
   }
@@ -122,19 +119,19 @@ int play_sound(const char *sound_path) {
   /* decode and play */
   while (mpg123_read(mh, buffer, buffer_size, &done) == MPG123_OK) {
     if (ao_play(dev, (char *)buffer, done) == 0) {
-      syslog(LOG_ERR, "ao_play() failed");
+      SYSLOG_ERR("ao_play() failed");
       break;
     }
   }
 
   if (ao_close(dev) == 0) {
-    syslog(LOG_ERR, "ao_close() failed");
+    SYSLOG_ERR("ao_close() failed");
   }
 err_ao_open_live:
 err_mpg123_encsize:
 err_mpg123_getformat:
   if (mpg123_close(mh) != MPG123_OK) {
-    syslog(LOG_ERR, "mpg123_close() failed");
+    SYSLOG_ERR("mpg123_close() failed");
   }
 err_mpg123_open:
   /* clean up */
@@ -169,9 +166,8 @@ void *handle_sound_name_queue() {
     }
     sound_realpath = pacq_peek();
     if (sound_realpath == NULL) {
-      syslog(LOG_ERR,
-             "Failed to peek() a non-empty queue. The 1st item will be "
-             "directly pacq_dequeue()'ed");
+      SYSLOG_ERR("Failed to peek() a non-empty queue. The 1st item will be "
+                 "directly pacq_dequeue()'ed");
 
       pacq_dequeue();
       continue;
@@ -193,10 +189,9 @@ void *handle_sound_name_queue() {
     int retval = play_sound(sound_realpath);
     pacq_dequeue();
     if (retval != 0) {
-      syslog(LOG_ERR,
-             "Failed to play: [%s], this sound will be removed from "
-             "sound_queue anyway, current queue_size: %zd",
-             sound_realpath, pacq_get_queue_size());
+      SYSLOG_ERR("Failed to play: [%s], this sound will be removed from "
+                 "sound_queue anyway, current queue_size: %zd",
+                 sound_realpath, pacq_get_queue_size());
     } else {
       // use to debug potential deadlock
       SYSLOG_INFO("[%s] played successfully, current queue_size: %zd",
@@ -221,8 +216,8 @@ int load_ssl_key_or_crt(const char *path, unsigned char **out_content) {
   int retval = 0;
   fp = fopen(path, "rb");
   if (fp == NULL) {
-    syslog(LOG_ERR, "%s.%d: Failed to fopen() path [%s]: %d(%s)", __FILE__,
-           __LINE__, path, errno, strerror(errno));
+    SYSLOG_ERR("%s.%d: Failed to fopen() path [%s]: %d(%s)", __FILE__, __LINE__,
+               path, errno, strerror(errno));
     retval = -1;
     goto err_fopen;
   }
@@ -231,9 +226,9 @@ int load_ssl_key_or_crt(const char *path, unsigned char **out_content) {
       fread(out_content, sizeof(unsigned char), SSL_FILE_BUFF_SIZE, fp);
   if (bytes_read > 0) {
   } else if (feof(fp)) {
-    syslog(LOG_ERR, "feof() error while reading from [%s]", path);
+    SYSLOG_ERR("feof() error while reading from [%s]", path);
   } else if (ferror(fp)) {
-    syslog(LOG_ERR, "ferror() while` reading from [%s]", path);
+    SYSLOG_ERR("ferror() while` reading from [%s]", path);
     retval = -1;
     goto err_ferror;
   }
@@ -246,16 +241,16 @@ err_fopen:
 int check_sound_repo_validity(const char *sound_repository_path) {
   if (sound_repository_path == NULL ||
       strnlen(sound_repository_path, PATH_MAX) >= PATH_MAX / 2) {
-    syslog(LOG_ERR, "%s.%d: sound_repository [%s] is either NULL or too long",
-           __FILE__, __LINE__, sound_repository_path);
+    SYSLOG_ERR("%s.%d: sound_repository [%s] is either NULL or too long",
+               __FILE__, __LINE__, sound_repository_path);
     return -1;
   }
   DIR *dir = opendir(sound_repository_path);
   if (dir) { // exist
     closedir(dir);
   } else {
-    syslog(LOG_ERR, "%s.%d: sound_repository [%s] is inaccessible", __FILE__,
-           __LINE__, sound_repository_path);
+    SYSLOG_ERR("%s.%d: sound_repository [%s] is inaccessible", __FILE__,
+               __LINE__, sound_repository_path);
     return -2;
   }
   return 0;
@@ -266,8 +261,8 @@ int load_values_from_json(const char *settings_path) {
   int retval = 0;
   json_object *root = json_object_from_file(settings_path);
   if (root == NULL) {
-    syslog(LOG_ERR, "%s.%d: json_object_from_file(%s) returned NULL: %s",
-           __FILE__, __LINE__, settings_path, json_util_get_last_err());
+    SYSLOG_ERR("%s.%d: json_object_from_file(%s) returned NULL: %s", __FILE__,
+               __LINE__, settings_path, json_util_get_last_err());
     retval = -1;
     goto err_json_parsing;
   }
@@ -310,26 +305,26 @@ int load_values_from_json(const char *settings_path) {
 
   if (strlen(gv_http_auth_username) == 0 || strlen(http_auth_password) == 0 ||
       (ssl_enabled && (ssl_crt_path == NULL || ssl_key_path == NULL))) {
-    syslog(LOG_ERR, "%s.%d: Some required values are not provided", __FILE__,
-           __LINE__);
+    SYSLOG_ERR("%s.%d: Some required values are not provided", __FILE__,
+               __LINE__);
     retval = -3;
     goto err_invalid_config;
   }
   if (ssl_enabled) {
     if (load_ssl_key_or_crt(ssl_crt_path, (unsigned char **)&gv_ssl_crt) < 0) {
-      syslog(LOG_ERR, "%s.%d: Failed to read SSL certificate file", __FILE__,
-             __LINE__);
+      SYSLOG_ERR("%s.%d: Failed to read SSL certificate file", __FILE__,
+                 __LINE__);
       retval = -4;
       goto err_invalid_config;
     }
     if (load_ssl_key_or_crt(ssl_key_path, (unsigned char **)&gv_ssl_key) < 0) {
-      syslog(LOG_ERR, "%s.%d: Failed to read SSL key file", __FILE__, __LINE__);
+      SYSLOG_ERR("%s.%d: Failed to read SSL key file", __FILE__, __LINE__);
       retval = -5;
       goto err_invalid_config;
     }
     if (strlen(gv_ssl_crt) == 0 || strlen(gv_ssl_key) == 0) {
-      syslog(LOG_ERR, "%s.%d: Either gv_ssl_crt or gv_ssl_key is empty",
-             __FILE__, __LINE__);
+      SYSLOG_ERR("%s.%d: Either gv_ssl_crt or gv_ssl_key is empty", __FILE__,
+                 __LINE__);
       retval = -6;
       goto err_invalid_config;
     }

@@ -33,14 +33,14 @@ static void signal_handler(int signum) {
 int install_signal_handler() {
   // This design canNOT handle more than 99 signal types
   if (_NSIG > 99) {
-    syslog(LOG_ERR, "%s.%d: signal_handler() can't handle more than 99 signals",
-           __FILE__, __LINE__);
+    SYSLOG_ERR("%s.%d: signal_handler() can't handle more than 99 signals",
+               __FILE__, __LINE__);
     return -1;
   }
   struct sigaction act;
   // Initialize the signal set to empty, similar to memset(0)
   if (sigemptyset(&act.sa_mask) == -1) {
-    syslog(LOG_ERR, "%s.%d: sigemptyset() failed", __FILE__, __LINE__);
+    SYSLOG_ERR("%s.%d: sigemptyset() failed", __FILE__, __LINE__);
     return -2;
   }
   act.sa_handler = signal_handler;
@@ -50,7 +50,7 @@ int install_signal_handler() {
   act.sa_flags = SA_RESETHAND;
   // act.sa_flags = 0;
   if (sigaction(SIGINT, &act, 0) == -1 || sigaction(SIGTERM, &act, 0) == -1) {
-    syslog(LOG_ERR, "%s.%d: sigaction() failed", __FILE__, __LINE__);
+    SYSLOG_ERR("%s.%d: sigaction() failed", __FILE__, __LINE__);
     return -3;
   }
   return 0;
@@ -90,30 +90,30 @@ int main(int argc, char **argv) {
 
   if ((r = install_signal_handler()) < 0) {
     retval = -1;
-    syslog(LOG_ERR, "%s.%d: install_signal_handler() failed, retval: %d",
-           __FILE__, __LINE__, r);
+    SYSLOG_ERR("%s.%d: install_signal_handler() failed, retval: %d", __FILE__,
+               __LINE__, r);
     goto err_mhd_not_ran_yet;
   }
 
   if ((r = load_values_from_json(config_path)) < 0) {
     retval = -2;
-    syslog(LOG_ERR,
-           "%s.%d: load_values_from_json() failed, probably due to malformed "
-           "JSON. retval: %d",
-           __FILE__, __LINE__, r);
+    SYSLOG_ERR(
+        "%s.%d: load_values_from_json() failed, probably due to malformed "
+        "JSON. retval: %d",
+        __FILE__, __LINE__, r);
     goto err_mhd_not_ran_yet;
   }
 
   if ((r = pacq_initialize_queue()) < 0) {
     retval = -3;
-    syslog(LOG_ERR, "%s.%d: pacq_initialize_queue() failed. retval: %d",
-           __FILE__, __LINE__, r);
+    SYSLOG_ERR("%s.%d: pacq_initialize_queue() failed. retval: %d", __FILE__,
+               __LINE__, r);
     goto err_mhd_not_ran_yet;
   }
   struct MHD_Daemon *d = init_mhd();
   if (d == NULL) {
     retval = -4;
-    syslog(LOG_ERR, "%s.%d: init_mhd() failed.", __FILE__, __LINE__);
+    SYSLOG_ERR("%s.%d: init_mhd() failed.", __FILE__, __LINE__);
     goto err_init_mhd;
   }
   SYSLOG_INFO("initialized");

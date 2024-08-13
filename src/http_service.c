@@ -85,7 +85,7 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
         snprintf(msg, PATH_MAX - 1,
                  "Failed to pthread_create() handle_sound_name_queue: %d(%s)",
                  errno, strerror(errno));
-        syslog(LOG_ERR, "%s", msg);
+        SYSLOG_ERR("%s", msg);
         resp = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
                                                MHD_RESPMEM_MUST_COPY);
         ret = MHD_queue_response(conn, MHD_HTTP_BAD_REQUEST, resp);
@@ -122,7 +122,7 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
   } else {
     snprintf(msg, PATH_MAX - 1, "Unknown internal error, new sound discarded.");
   }
-  syslog(LOG_ERR, "%s.%d: %s", __FILE__, __LINE__, msg);
+  SYSLOG_ERR("%s.%d: %s", __FILE__, __LINE__, msg);
   resp = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
                                          MHD_RESPMEM_MUST_COPY);
   ret = MHD_queue_response(conn, MHD_HTTP_INTERNAL_SERVER_ERROR, resp);
@@ -221,8 +221,8 @@ struct MHD_Daemon *init_mhd() {
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(gv_port);
   if (inet_pton(AF_INET, gv_interface, &(server_addr.sin_addr)) < 0) {
-    syslog(LOG_ERR, "%s.%d: inet_pton() error: %d(%s)", __FILE__, __LINE__,
-           errno, strerror(errno));
+    SYSLOG_ERR("%s.%d: inet_pton() error: %d(%s)", __FILE__, __LINE__, errno,
+               strerror(errno));
     return NULL;
   }
 
@@ -246,7 +246,7 @@ struct MHD_Daemon *init_mhd() {
       MHD_OPTION_END);
   // clang-format on
   if (daemon == NULL) {
-    syslog(LOG_ERR, "%s.%d: MHD_start_daemon() failed", __FILE__, __LINE__);
+    SYSLOG_ERR("%s.%d: MHD_start_daemon() failed", __FILE__, __LINE__);
     return NULL;
   }
   SYSLOG_INFO("HTTP server listening on %s://%s:%d",
