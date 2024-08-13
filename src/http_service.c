@@ -67,10 +67,13 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
   struct MHD_Response *resp = NULL;
   char msg[PATH_MAX];
   int r;
-  ssize_t qs = pacq_get_queue_size();
 
   delay_ms = delay_ms > 2000 ? 2000 : delay_ms;
   usleep(delay_ms * 1000);
+  // Need to usleep() before getting pacq_get_queue_size(), otherwise the queue
+  // may be not empty at the moment of pacq_get_queue_size() but after usleep(),
+  // the queue could be empty
+  ssize_t qs = pacq_get_queue_size();
   if (pacq_enqueue(sound_realpath) == 0) {
     if (qs == 0) { // i.e., before pacq_enqueue() the queue is empty, so we
                    // start a new handle_sound_name_queue thread.
@@ -103,7 +106,7 @@ enum MHD_Result resp_add_sound_to_queue(struct MHD_Connection *conn,
              "synchornization purpose), sound_queue_size: %zd "
              "(MAX_SOUND_QUEUE_SIZE: %d)",
              sound_name, delay_ms, pacq_get_queue_size(), MAX_SOUND_QUEUE_SIZE);
-    syslog(LOG_INFO, "%s", msg);
+    SYSLOG_INFO("%s", msg);
     resp = MHD_create_response_from_buffer(strlen(msg), (void *)msg,
                                            MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(resp, "Content-Type", "text/html; charset=utf-8");
@@ -133,6 +136,7 @@ request_handler(__attribute__((unused)) void *cls, struct MHD_Connection *conn,
                 __attribute__((unused)) const char *version,
                 __attribute__((unused)) const char *upload_data,
                 __attribute__((unused)) size_t *upload_data_size, void **ptr) {
+  SYSLOG_INFO("HTTP request: %s", url);
   static int aptr;
   // const char *me = (const char *)cls;
   struct MHD_Response *resp = NULL;
@@ -245,7 +249,7 @@ struct MHD_Daemon *init_mhd() {
     syslog(LOG_ERR, "%s.%d: MHD_start_daemon() failed", __FILE__, __LINE__);
     return NULL;
   }
-  syslog(LOG_INFO, "HTTP server listening on %s://%s:%d",
-         ssl_enabled ? "https" : "http", gv_interface, gv_port);
+  SYSLOG_INFO("HTTP server listening on %s://%s:%d",
+              ssl_enabled ? "https" : "http", gv_interface, gv_port);
   return daemon;
 }

@@ -1,4 +1,5 @@
 #include "queue.h"
+#include "utils.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -99,13 +100,13 @@ int pacq_enqueue(const char *sound_name) {
   int retval = 0;
   ssize_t queue_size = pacq_get_queue_size();
   if (queue_size > MAX_SOUND_QUEUE_SIZE || queue_size < 0) {
-    syslog(LOG_ERR, "unexpected sound_queue internal state, queue_size: %ld",
-           queue_size);
+    SYSLOG_ERR("unexpected sound_queue internal state, queue_size: %d",
+               queue_size);
     return -1;
   }
   if (queue_size == MAX_SOUND_QUEUE_SIZE) {
     syslog(LOG_WARNING,
-           "sound_queue full, queue_size: %ld, MAX_SOUND_QUEUE_SIZE: %d",
+           "sound_queue full, queue_size: %d, MAX_SOUND_QUEUE_SIZE: %d",
            queue_size, MAX_SOUND_QUEUE_SIZE);
     return -1;
   }
@@ -186,7 +187,7 @@ void pacq_finalize_queue() {
     if (queue_sz > 0) {
       pacq_dequeue();
     } else if (queue_sz == 0) {
-      syslog(LOG_INFO, "sound_queue cleared.");
+      SYSLOG_INFO("sound_queue cleared.");
       break;
     } else {
       syslog(LOG_ERR, "sound_queue in an unexpected state.");

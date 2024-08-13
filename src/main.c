@@ -116,7 +116,7 @@ int main(int argc, char **argv) {
     syslog(LOG_ERR, "%s.%d: init_mhd() failed.", __FILE__, __LINE__);
     goto err_init_mhd;
   }
-  syslog(LOG_INFO, "initialized");
+  SYSLOG_INFO("initialized");
 
   // getc() won't work without an interactive shell.
   // (void)getc(stdin);
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     sleep(1);
   }
 
-  syslog(LOG_INFO, "exiting");
+  SYSLOG_INFO("exiting");
   MHD_stop_daemon(d);
 err_init_mhd:
   pacq_finalize_queue();

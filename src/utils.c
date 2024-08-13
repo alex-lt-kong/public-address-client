@@ -153,12 +153,17 @@ err_ao_default_driver_id:
 void *handle_sound_name_queue() {
   char *sound_realpath = NULL;
   while (1) {
-    size_t qs = pacq_get_queue_size();
+    ssize_t qs = pacq_get_queue_size();
 
     free(sound_realpath);
+
+    if (qs == -1) {
+      SYSLOG_ERR("sound_name_queue is in an unexpected state, this function "
+                 "can no longer continue");
+      break;
+    }
     if (qs == 0) {
-      syslog(
-          LOG_INFO,
+      SYSLOG_INFO(
           "sound_name_queue cleared, handle_sound_name_queue() thread quited");
       break;
     }
@@ -180,8 +185,8 @@ void *handle_sound_name_queue() {
       continue;
     }
 
-    syslog(LOG_INFO, "Currently playing: [%s], current sound_queue_size: %lu",
-           sound_realpath, qs);
+    SYSLOG_INFO("Currently playing: [%s], current sound_queue_size: %zd",
+                sound_realpath, qs);
     // We dont check file accessibility here, this is checked on index_page()
     // mpg123/ao will return if the file does not exist without breaking the
     // program
@@ -190,12 +195,12 @@ void *handle_sound_name_queue() {
     if (retval != 0) {
       syslog(LOG_ERR,
              "Failed to play: [%s], this sound will be removed from "
-             "sound_queue anyway, current queue_size: %ld",
+             "sound_queue anyway, current queue_size: %zd",
              sound_realpath, pacq_get_queue_size());
     } else {
       // use to debug potential deadlock
-      syslog(LOG_INFO, "[%s] played successfully, current queue_size: %ld",
-             sound_realpath, pacq_get_queue_size());
+      SYSLOG_INFO("[%s] played successfully, current queue_size: %zd",
+                  sound_realpath, pacq_get_queue_size());
     }
   }
   return (void *)NULL;

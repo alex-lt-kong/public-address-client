@@ -16,6 +16,11 @@
 #define PROGRAM_NAME "public-address-client"
 #define SSL_FILE_BUFF_SIZE 8192
 
+#define SYSLOG_ERR(format, ...)                                                \
+  syslog(LOG_ERR, "[%s:%s()] " format, __FILE__, __func__, ##__VA_ARGS__)
+#define SYSLOG_INFO(format, ...)                                               \
+  syslog(LOG_INFO, "[%s:%s()] " format, __FILE__, __func__, ##__VA_ARGS__)
+
 extern char gv_sound_repository_path[];
 extern char gv_http_auth_username[];
 extern char http_auth_password[];
